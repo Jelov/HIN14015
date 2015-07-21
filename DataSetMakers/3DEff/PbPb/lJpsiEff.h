@@ -1,5 +1,7 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
+#include <stdexcept>
 
 #include <TROOT.h>
 #include <TStyle.h>
@@ -20,12 +22,13 @@
 
 using namespace std;
 
+//0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
+static const bool use3DCtau = true;
+
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
 //  if (ptmax<=6.5) return true;
-//  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
-//  else return false;
-  return false;
-
+  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
+  else return false;
 }
 
 bool isMuonInAccept(const TLorentzVector *aMuon) {
@@ -109,6 +112,21 @@ class Eff3DMC {
     TClonesArray *Reco_QQ_4mom, *Gen_QQ_4mom;
     TClonesArray *Reco_QQ_mupl_4mom, *Gen_QQ_mupl_4mom;
     TClonesArray *Reco_QQ_mumi_4mom, *Gen_QQ_mumi_4mom;
+
+    string inFileNamesLxyz[100];
+    TFile *fileLxyz, *inFileLxyz[100];
+    TTree *treeLxyz;
+    TChain *chainLxyz;
+
+    unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
+    Int_t Reco_QQ_sizeLxyz, Gen_QQ_sizeLxyz;
+    Float_t Reco_QQ_ctau3D[100], Reco_QQ_ctauTrue3D[100], Reco_QQ_ctauLxy[100], Gen_QQ_ctau3D[100];
+    TClonesArray *Reco_QQ_4momLxyz, *Gen_QQ_4momLxyz;;
+    
+    TBranch *b_eventNbLxyz, *b_runNbLxyz, *b_LSLxyz, *b_Reco_QQ_sizeLxyz, *b_Gen_QQ_sizeLxyz;
+    TBranch *b_Reco_QQ_ctau3D, *b_Reco_QQ_ctauTrue3D, *b_Reco_QQ_ctauLxy, *b_Gen_QQ_ctau3D;
+    TBranch *b_Reco_QQ_4momLxyz, *b_Gen_QQ_4momLxyz;
+
     
     int nbinsy, nbinsy2, nbinspt, nbinspt2, nbinsctau, nbinsmidctau, nbinsforwctau, nbinscent, nbinscent2, nbinsresol;
     double resolmin, resolmax;
@@ -125,8 +143,8 @@ class Eff3DMC {
 
 
   public:
-    Eff3DMC(int _nFiles, string str1[], string str2, bool abs, bool npmc, bool isPbPb);
-    Eff3DMC(string, string, bool, bool, bool);
+    Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb);
+    Eff3DMC(string, string, string, bool, bool, bool);
     ~Eff3DMC();
     int SetTree();
     void CreateHistos(const int _nbinsy, const double *yarray, const int _nbinsy2, const double *yarray2, const int _nbinspt, const double *ptarray, const int _nbinspt2, const double *ptarray2, const int _nbinscent, const int *centarray, const int _nbinscent2, const int *centarray2, const int _nbinsctau, const double *_ctauarray, const int _nbinsforwctau, const double *_ctauforwarray);
@@ -135,42 +153,57 @@ class Eff3DMC {
     void SaveHistos(string str);
 };
 
-Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2, bool abs, bool _npmc, bool _isPbPb) {
+Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb) {
   npmc = _npmc;
   nFiles = _nFiles;
   for (int i=0; i<nFiles; i++) {
     inFileNames[i] = str1[i];
     cout << "inFileNames[" << i << "]: " << inFileNames[i] << endl;
   }
-  className = str2;
+
+  if (use3DCtau) {
+    for (int i=0; i<nFiles; i++) {
+      inFileNamesLxyz[i] = str2[i];
+      cout << "inFileNamesLxyz[" << i << "]: " << inFileNamesLxyz[i] << endl;
+    }
+  }
+
+  className = str3;
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "nFiles: " << nFiles << endl;
-
+  
 //  fileSinMuW = new TFile(str1[nFiles-2].c_str(),"read");
 //  fileSinMuW_LowPt = new TFile(str1[nFiles-1].c_str(),"read");
 }
 
 
-Eff3DMC::Eff3DMC(string str1, string str2, bool abs, bool _npmc, bool _isPbPb) {
+Eff3DMC::Eff3DMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb) {
   npmc = _npmc;
   nFiles = 1;
   inFileNames[0] = str1;
-  className = str2;
+  if (use3DCtau)
+    inFileNamesLxyz[0] = str2;
+  className = str3;
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "inFileNames: " << inFileNames[0] << endl;
+  if (use3DCtau)
+    cout << "inFileNamesLxyz: " << inFileNamesLxyz[0] << endl;
   cout << "nFiles: " << nFiles << endl;
 }
 
 Eff3DMC::~Eff3DMC() {
   if (nFiles==1) {
     file->Close();
+    if (use3DCtau) fileLxyz->Close();
   } else {
 //    fileSinMuW->Close();
 //    fileSinMuW_LowPt->Close();
     delete chain;
+    if (use3DCtau) chainLxyz;
   }
+
 
   delete h1DGenRap;
   delete h1DRecRap;
@@ -200,6 +233,7 @@ Eff3DMC::~Eff3DMC() {
 }
 
 int Eff3DMC::SetTree() { 
+
   Reco_QQ_4mom=0, Gen_QQ_4mom=0;
   Reco_QQ_mupl_4mom=0, Gen_QQ_mupl_4mom=0;
   Reco_QQ_mumi_4mom=0, Gen_QQ_mumi_4mom=0;
@@ -253,6 +287,51 @@ int Eff3DMC::SetTree() {
   } else {
     cout << "SetTree: nFiles is less than 1. Insert \"nFiles\" larger than 0" <<endl;
     return -1;
+  }
+
+  if (use3DCtau) {
+    // Settings for Lxyz information imports to normal onia tree
+    Reco_QQ_4momLxyz = 0;
+    Gen_QQ_4momLxyz = 0;
+
+    if (nFiles==1) {
+      fileLxyz = TFile::Open(inFileNamesLxyz[0].c_str());
+      treeLxyz = (TTree*)fileLxyz->Get("myTree");
+
+      treeLxyz->SetBranchAddress("runNb", &runNbLxyz, &b_runNbLxyz);
+      treeLxyz->SetBranchAddress("eventNb", &eventNbLxyz, &b_eventNbLxyz);
+      treeLxyz->SetBranchAddress("LS", &LSLxyz, &b_LSLxyz);
+
+      treeLxyz->SetBranchAddress("Reco_QQ_size", &Reco_QQ_sizeLxyz, &b_Reco_QQ_sizeLxyz);
+      treeLxyz->SetBranchAddress("Reco_QQ_4mom", &Reco_QQ_4momLxyz, &b_Reco_QQ_4momLxyz);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctau", Reco_QQ_ctauLxy, &b_Reco_QQ_ctauLxy);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctau3D", Reco_QQ_ctau3D, &b_Reco_QQ_ctau3D);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctauTrue3D", Reco_QQ_ctauTrue3D, &b_Reco_QQ_ctauTrue3D);
+
+      treeLxyz->SetBranchAddress("Gen_QQ_size", &Gen_QQ_sizeLxyz, &b_Gen_QQ_sizeLxyz);
+      treeLxyz->SetBranchAddress("Gen_QQ_4mom", &Gen_QQ_4momLxyz, &b_Gen_QQ_4momLxyz);
+      treeLxyz->SetBranchAddress("Gen_QQ_ctau3D", Gen_QQ_ctau3D, &b_Gen_QQ_ctau3D);
+
+    } else if (nFiles > 1) {
+      chainLxyz = new TChain("myTree");
+      for (int i=0; i<nFiles; i++) {
+        chainLxyz->Add(inFileNamesLxyz[i].c_str());
+      }
+
+      chainLxyz->SetBranchAddress("runNb", &runNbLxyz, &b_runNbLxyz);
+      chainLxyz->SetBranchAddress("eventNb", &eventNbLxyz, &b_eventNbLxyz);
+      chainLxyz->SetBranchAddress("LS", &LSLxyz, &b_LSLxyz);
+
+      chainLxyz->SetBranchAddress("Reco_QQ_size", &Reco_QQ_sizeLxyz, &b_Reco_QQ_sizeLxyz);
+      chainLxyz->SetBranchAddress("Reco_QQ_4mom", &Reco_QQ_4momLxyz, &b_Reco_QQ_4momLxyz);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctau", Reco_QQ_ctauLxy, &b_Reco_QQ_ctauLxy);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctau3D", Reco_QQ_ctau3D, &b_Reco_QQ_ctau3D);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctauTrue3D", Reco_QQ_ctauTrue3D, &b_Reco_QQ_ctauTrue3D);
+
+      chainLxyz->SetBranchAddress("Gen_QQ_size", &Gen_QQ_sizeLxyz, &b_Gen_QQ_sizeLxyz);
+      chainLxyz->SetBranchAddress("Gen_QQ_4mom", &Gen_QQ_4momLxyz, &b_Gen_QQ_4momLxyz);
+      chainLxyz->SetBranchAddress("Gen_QQ_ctau3D", Gen_QQ_ctau3D, &b_Gen_QQ_ctau3D);
+    }
   }
   
   return 0;
@@ -412,8 +491,39 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
   }
   ////// End of single muon efficiency weighting (RD/MC)
 
+  // Make a map from event list
+  map<int, int> mapEvtList;
+  map<int, int>::iterator it_map;
+  if (use3DCtau) {
+    fstream LifetimeEntryList;
+    if (npmc) LifetimeEntryList.open("./EntryList_NPMC.txt",fstream::in);
+    else LifetimeEntryList.open("./EntryList_PRMC.txt",fstream::in);
+
+    cout << "Start reading EntryList_" ;
+    if (npmc) cout << "NPMC.txt" << endl;
+    else cout << "PRMC.txt" << endl;
+
+    while (LifetimeEntryList.good()) {
+      int evFull, evLxyz;
+      unsigned int evtnum;
+      double rap, pt, phi;
+
+      LifetimeEntryList >> rap >> pt >> phi >> evtnum >> evFull >> evLxyz;
+//      cout << rap << " " << pt << " " << phi << " " << evtnum << " " << evFull << " " << evLxyz << endl;
+      try {
+        mapEvtList.at(evFull);
+        if (mapEvtList.at(evFull) != evLxyz) {
+          cout << "Duplicate evFull has found: " << evFull << " " << mapEvtList.at(evFull) << endl;
+          cout << "Duplicate evFull has different evLxyz. Should check EntryList.txt file and re-do!" << endl;
+        }
+      } catch (const std::out_of_range& oor) {
+        mapEvtList[evFull] = evLxyz;
+        cout << evFull << "\t" << evLxyz << endl;
+      }
+    }
+  } // End of making map for event list
+
   double weight = 0;
-//  for (int ev=0; ev<1000000; ev++) {
   for (int ev=0; ev<totalEvt; ev++) {
     if (ev%10000 == 0)
       cout << "LoopTree: " << "event # " << ev << " / " << totalEvt << endl;
@@ -440,6 +550,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
       double dctaureco = Reco_QQ_ctau[iRec];
       double dlxy = dctau*dpt/3.096916;
       double dlxyreco = dctaureco*dpt/3.096916;
+      
       if ( isMuonInAccept(recoMu1) && isMuonInAccept(recoMu2) &&
            recoDiMu->M() >= 2.95 && recoDiMu->M()< 3.25 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] &&
@@ -457,6 +568,36 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         } else {
           if ( !((HLTriggers&2)==2 && (Reco_QQ_trig[iRec]&2)==2) ) continue;
         }
+
+        // If 3D ctau is going to be used
+        if (use3DCtau) {
+          int eventLxyz = 0;
+          try {
+            eventLxyz = mapEvtList.at(ev);
+          } catch (const std::out_of_range& oor) {
+            continue; // Skip this event, which will not be used in the end!
+          } 
+          if (nFiles==1) treeLxyz->GetEntry(eventLxyz);
+          else chainLxyz->GetEntry(eventLxyz);
+
+          cout << "event\teventLxyz " << ev << "\t" << eventLxyz << endl;
+          
+          TLorentzVector* JPLxyz = new TLorentzVector;
+          for (int j=0; j<Reco_QQ_sizeLxyz; ++j) {
+            TLorentzVector *JPLxyz = (TLorentzVector*)Reco_QQ_4momLxyz->At(j);
+            if ((JPLxyz->M() == recoDiMu->M()) && (JPLxyz->Pt() == recoDiMu->Pt()) && (JPLxyz->Rapidity() == recoDiMu->Rapidity())) {
+                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << " ";
+                double dp = recoDiMu->P();
+                dctau = Reco_QQ_ctauTrue3D[j]*10;
+                dctaureco = Reco_QQ_ctau3D[j];
+                dlxy = dctau*dp/3.096916;
+                dlxyreco = dctaureco*dp/3.096916;
+                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << endl;
+                cout << "Apply Lxyz RECO!" << endl;
+            }
+          }
+          delete JPLxyz;
+        } // end of loading 3D ctau information
 
         // Get weighting factors
         double NcollWeight = findCenWeight(centrality);
@@ -553,6 +694,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
       double dpt = genDiMu.Pt();
       double dctau = Gen_QQ_ctau[iGen] * 10;
       double dlxy = dctau*dpt/3.096916;
+
       if ( isMuonInAccept(genMu1) && isMuonInAccept(genMu2) &&
            genDiMu.M() > 2 && genDiMu.M()< 4 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] 
@@ -562,6 +704,36 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         } else {
           if (!(drap >= yarray[0] && drap <= yarray[nbinsy-1])) continue;
         }
+
+        // If 3D ctau is going to be used
+        if (use3DCtau) {
+          int eventLxyz = 0;
+          try {
+            eventLxyz = mapEvtList.at(ev);
+          } catch (const std::out_of_range& oor) {
+            continue; // Skip this event, which will not be used in the end!
+          } 
+          if (nFiles==1) treeLxyz->GetEntry(eventLxyz);
+          else chainLxyz->GetEntry(eventLxyz);
+
+          cout << "GEN event\teventLxyz " << ev << "\t" << eventLxyz << " " << Gen_QQ_sizeLxyz<< endl;
+          
+          TLorentzVector* JPLxyz = new TLorentzVector;
+          for (int j=0; j<Gen_QQ_sizeLxyz; ++j) {
+            TLorentzVector *JPLxyz = (TLorentzVector*)Gen_QQ_4momLxyz->At(j);
+            if ( TMath::Abs(JPLxyz->M()-genDiMu.M())<JPLxyz->M()*1E-3 && TMath::Abs(JPLxyz->Pt()-genDiMu.Pt())<JPLxyz->Pt()*1E-3 && TMath::Abs(JPLxyz->Rapidity()-genDiMu.Rapidity())*1E-3) {
+                cout << dctau << " " << dlxy << " ";
+                double dp = genDiMu.P();
+                dctau = Gen_QQ_ctau3D[j] * 10;
+                dlxy = dctau*dp/3.096916;
+                cout << dctau << " " << dlxy << endl;
+                cout << "Apply Lxyz GEN!" << endl;
+//            } else {
+//              cout << "GEN skipped for " << j << " " << JPLxyz->M() << " " <<  genDiMu.M() << " " << JPLxyz->Pt() << " " << genDiMu.Pt() << " " << JPLxyz->Rapidity() << " " << genDiMu.Rapidity() << endl;
+            }
+          }
+          delete JPLxyz;
+        } // end of loading 3D ctau information
 
         double NcollWeight = findCenWeight(centrality);
         if (absRapidity) {
@@ -792,6 +964,20 @@ class EffMC {
     int nbinsy, nbinspt, nbinsctau, nbinsmidctau, nbinsforwctau, nbinscent, nbinsresol;
     double resolmin, resolmax;
 
+    string inFileNamesLxyz[100];
+    TFile *fileLxyz, *inFileLxyz[100];
+    TTree *treeLxyz;
+    TChain *chainLxyz;
+
+    unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
+    Int_t Reco_QQ_sizeLxyz, Gen_QQ_sizeLxyz;
+    Float_t Reco_QQ_ctau3D[100], Reco_QQ_ctauTrue3D[100], Reco_QQ_ctauLxy[100], Gen_QQ_ctau3D[100];
+    TClonesArray *Reco_QQ_4momLxyz, *Gen_QQ_4momLxyz;
+    
+    TBranch *b_eventNbLxyz, *b_runNbLxyz, *b_LSLxyz, *b_Reco_QQ_sizeLxyz, *b_Gen_QQ_sizeLxyz;
+    TBranch *b_Reco_QQ_ctau3D, *b_Reco_QQ_ctauTrue3D, *b_Reco_QQ_ctauLxy, *b_Gen_QQ_ctau3D;
+    TBranch *b_Reco_QQ_4momLxyz, *b_Gen_QQ_4momLxyz;
+
     // Lxy histo
     TH3D *hGenLxy[20], *hRecLxy[20], *hEffLxy[20];
     TH1D *hGenLxyDiff[200], *hGenLxyRap[20], *hGenLxyPt[20], *hGenLxyCent[20], *hGenLxyA;
@@ -809,8 +995,8 @@ class EffMC {
     
 
   public:
-    EffMC(int _nFiles, string str1[], string str2, bool abs, bool npmc, bool isPbPb);
-    EffMC(string, string, bool, bool, bool);
+    EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb);
+    EffMC(string, string, string, bool, bool, bool);
     ~EffMC();
     int SetTree();
     void CreateHistos(const int _nbinsy, const double *yarray, const int _nbinspt, const double *ptarray, const int _nbinscent, const int *centarray, const int _nbinsctau, const double *_ctauarray, const int _nbinsforwctau, const double *_ctauforwarray, const int _nbinsresol, const double _resolmin, const double _resolmax);
@@ -819,14 +1005,19 @@ class EffMC {
     void SaveHistos(string str, const double *yarray, const double *ptarray, const int *centarray);
 };
 
-EffMC::EffMC(int _nFiles, string str1[], string str2, bool abs, bool _npmc, bool _isPbPb) {
+EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb) {
   npmc = _npmc;
   nFiles = _nFiles;
   for (int i=0; i<nFiles; i++) {
     inFileNames[i] = str1[i];
     cout << "inFileNames[" << i << "]: " << inFileNames[i] << endl;
   }
-  className = str2;
+  for (int i=0; i<nFiles; i++) {
+    inFileNamesLxyz[i] = str2[i];
+    cout << "inFileNamesLxyz[" << i << "]: " << inFileNamesLxyz[i] << endl;
+  }
+
+  className = str3;
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "nFiles: " << nFiles << endl;
@@ -836,24 +1027,30 @@ EffMC::EffMC(int _nFiles, string str1[], string str2, bool abs, bool _npmc, bool
 }
 
 
-EffMC::EffMC(string str1, string str2, bool abs, bool _npmc, bool _isPbPb) {
+EffMC::EffMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb) {
   npmc = _npmc;
   nFiles = 1;
   inFileNames[0] = str1;
+  if (use3DCtau) 
+    inFileNamesLxyz[0] = str2;
   className = str2;
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "inFileNames: " << inFileNames[0] << endl;
+  if (use3DCtau) 
+    cout << "inFileNamesLxyz: " << inFileNamesLxyz[0] << endl;
   cout << "nFiles: " << nFiles << endl;
 }
 
 EffMC::~EffMC() {
   if (nFiles==1) {
     file->Close();
+    if (use3DCtau) fileLxyz->Close();
   } else {
 //    fileSinMuW->Close();
 //    fileSinMuW_LowPt->Close();
     delete chain;
+    if (use3DCtau) chainLxyz;
   }
   
   delete hGenLxyA;
@@ -976,6 +1173,53 @@ int EffMC::SetTree() {
     return -1;
   }
   
+  if (use3DCtau) {
+    // Settings for Lxyz information imports to normal onia tree
+    Reco_QQ_4momLxyz = 0;
+    Gen_QQ_4momLxyz = 0;
+
+    if (nFiles==1) {
+      fileLxyz = TFile::Open(inFileNamesLxyz[0].c_str());
+      treeLxyz = (TTree*)fileLxyz->Get("myTree");
+
+      treeLxyz->SetBranchAddress("runNb", &runNbLxyz, &b_runNbLxyz);
+      treeLxyz->SetBranchAddress("eventNb", &eventNbLxyz, &b_eventNbLxyz);
+      treeLxyz->SetBranchAddress("LS", &LSLxyz, &b_LSLxyz);
+
+      treeLxyz->SetBranchAddress("Reco_QQ_size", &Reco_QQ_sizeLxyz, &b_Reco_QQ_sizeLxyz);
+      treeLxyz->SetBranchAddress("Reco_QQ_4mom", &Reco_QQ_4momLxyz, &b_Reco_QQ_4momLxyz);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctau", Reco_QQ_ctauLxy, &b_Reco_QQ_ctauLxy);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctau3D", Reco_QQ_ctau3D, &b_Reco_QQ_ctau3D);
+      treeLxyz->SetBranchAddress("Reco_QQ_ctauTrue3D", Reco_QQ_ctauTrue3D, &b_Reco_QQ_ctauTrue3D);
+
+      treeLxyz->SetBranchAddress("Gen_QQ_size", &Gen_QQ_sizeLxyz, &b_Gen_QQ_sizeLxyz);
+      treeLxyz->SetBranchAddress("Gen_QQ_4mom", &Gen_QQ_4momLxyz, &b_Gen_QQ_4momLxyz);
+      treeLxyz->SetBranchAddress("Gen_QQ_ctau3D", Gen_QQ_ctau3D, &b_Gen_QQ_ctau3D);
+
+    } else if (nFiles > 1) {
+      chainLxyz = new TChain("myTree");
+      for (int i=0; i<nFiles; i++) {
+        chainLxyz->Add(inFileNamesLxyz[i].c_str());
+      }
+
+      chainLxyz->SetBranchAddress("runNb", &runNbLxyz, &b_runNbLxyz);
+      chainLxyz->SetBranchAddress("eventNb", &eventNbLxyz, &b_eventNbLxyz);
+      chainLxyz->SetBranchAddress("LS", &LSLxyz, &b_LSLxyz);
+
+      chainLxyz->SetBranchAddress("Reco_QQ_size", &Reco_QQ_sizeLxyz, &b_Reco_QQ_sizeLxyz);
+      chainLxyz->SetBranchAddress("Reco_QQ_4mom", &Reco_QQ_4momLxyz, &b_Reco_QQ_4momLxyz);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctau", Reco_QQ_ctauLxy, &b_Reco_QQ_ctauLxy);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctau3D", Reco_QQ_ctau3D, &b_Reco_QQ_ctau3D);
+      chainLxyz->SetBranchAddress("Reco_QQ_ctauTrue3D", Reco_QQ_ctauTrue3D, &b_Reco_QQ_ctauTrue3D);
+
+      chainLxyz->SetBranchAddress("Gen_QQ_size", &Gen_QQ_sizeLxyz, &b_Gen_QQ_sizeLxyz);
+      chainLxyz->SetBranchAddress("Gen_QQ_4mom", &Gen_QQ_4momLxyz, &b_Gen_QQ_4momLxyz);
+      chainLxyz->SetBranchAddress("Gen_QQ_ctau3D", Gen_QQ_ctau3D, &b_Gen_QQ_ctau3D);
+    }
+
+    cout << "End of SetBranchAddress for Lxyz trees" << endl;
+  }
+
   return 0;
   
 }
@@ -1002,13 +1246,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
   hGenLxyA = new TH1D(
       Form("hGenLxy1D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
-      ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+      ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
   hRecLxyA = new TH1D(
       Form("hRecLxy1D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
-      ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+      ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
   hEffLxyA = new TH1D(
       Form("hEffLxy1D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
-      ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+      ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
 
   hGenA = new TH1D(
       Form("hGen1D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
@@ -1025,7 +1269,7 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
       ";(#font[12]{l}_{J/#psi} - #font[12]{l}_{J/#psi}(true)) / #font[12]{l}_{J/#psi}(true)",nbinsresol,resolmin,resolmax);
   hresolLxyA = new TH1D(
       Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
-      ";(L_{xy} - L_{xy}(true)) / L_{xy}(true)",nbinsresol,resolmin,resolmax);
+      ";(L_{xyz} - L_{xyz}(true)) / L_{xyz}(true)",nbinsresol,resolmin,resolmax);
 
   for (int a=0; a<nbinsy-1; a++) {
     for (int b=0; b<nbinspt-1; b++) {
@@ -1045,13 +1289,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
         hGenLxyDiff[nidx] = new TH1D(
             Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-            ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+            ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
         hRecLxyDiff[nidx] = new TH1D(
             Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-            ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+            ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
         hEffLxyDiff[nidx] = new TH1D(
             Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-            ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+            ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
         hGenDiff[nidx] = new TH1D(
             Form("hGen_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
             ";#font[12]{l}_{J/#psi} (true) (mm)",nbinsctau-1,ctauarray);
@@ -1066,7 +1310,7 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
             cout << "CreateHistos: nidx " <<  nidx << " " << a << " " << b << " " << c << " " << d << " ";
           hMeanLxy[nidx][d] = new TH1D(
             Form("hMeanLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_Lxy%.1f-%.1f",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax,ctauarray[d],ctauarray[d+1])
-            ,";L_{xy} (Reco) (mm)",(ctauarray[d+1]-ctauarray[d])/100,ctauarray[d],ctauarray[d+1]);
+            ,";L_{xyz} (Reco) (mm)",(ctauarray[d+1]-ctauarray[d])/100,ctauarray[d],ctauarray[d+1]);
           cout << hMeanLxy[nidx][d] << endl;
         }
 
@@ -1080,13 +1324,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
     hGenLxy[i] = new TH3D(
         Form("hGenLxy3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
-        ";Rapidity;p_{T} (GeV/c);L_{xy} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
+        ";Rapidity;p_{T} (GeV/c);L_{xyz} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
     hRecLxy[i] = new TH3D(
         Form("hRecLxy3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
-        ";Rapidity;p_{T} (GeV/c);L_{xy} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
+        ";Rapidity;p_{T} (GeV/c);L_{xyz} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
     hEffLxy[i] = new TH3D(
         Form("hEffLxy3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
-        ";Rapidity;p_{T} (GeV/c);L_{xy} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
+        ";Rapidity;p_{T} (GeV/c);L_{xyz} (true) (mm)",nbinsy-1,yarray,nbinspt-1,ptarray,nbinsctau-1,ctauarray);
 
     hGen[i] = new TH3D(
         Form("hGen3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
@@ -1114,13 +1358,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
     hGenLxyRap[i] = new TH1D(
         Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hRecLxyRap[i] = new TH1D(
         Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hEffLxyRap[i] = new TH1D(
         Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
 
     hGenRap[i] = new TH1D(
         Form("hGen_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
@@ -1137,7 +1381,7 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
         ";(#font[12]{l}_{J/#psi} - #font[12]{l}_{J/#psi}(true)) / #font[12]{l}_{J/#psi}(true)",nbinsresol,resolmin,resolmax);
     hresolLxyRap[i] = new TH1D(
         Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";(L_{xy} - L_{xy}(true)) / L_{xy}(true)",nbinsresol,resolmin,resolmax);
+        ";(L_{xyz} - L_{xyz}(true)) / L_{xyz}(true)",nbinsresol,resolmin,resolmax);
     
   }
 
@@ -1156,13 +1400,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
     hGenLxyPt[i] = new TH1D(
         Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hRecLxyPt[i] = new TH1D(
         Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hEffLxyPt[i] = new TH1D(
         Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
 
     hGenPt[i] = new TH1D(
         Form("hGen_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
@@ -1179,7 +1423,7 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
         ";(#font[12]{l}_{J/#psi} - #font[12]{l}_{J/#psi}(true)) / #font[12]{l}_{J/#psi}(true)",nbinsresol,resolmin,resolmax);
     hresolLxyPt[i] = new TH1D(
         Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";(L_{xy} - L_{xy}(true)) / L_{xy}(true)",nbinsresol,resolmin,resolmax);
+        ";(L_{xyz} - L_{xyz}(true)) / L_{xyz}(true)",nbinsresol,resolmin,resolmax);
   }
 
   for (int i=0; i<nbinscent-1; i++) {
@@ -1197,13 +1441,13 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
     hGenLxyCent[i] = new TH1D(
         Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hRecLxyCent[i] = new TH1D(
         Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
     hEffLxyCent[i] = new TH1D(
         Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";L_{xy} (true) (mm)",nbinsctau-1,ctauarray);
+        ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
 
     hGenCent[i] = new TH1D(
         Form("hGen_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
@@ -1220,7 +1464,7 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
         ";(#font[12]{l}_{J/#psi} - #font[12]{l}_{J/#psi}(true)) / #font[12]{l}_{J/#psi}(true)",nbinsresol,resolmin,resolmax);
     hresolLxyCent[i] = new TH1D(
         Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-        ";(L_{xy} - L_{xy}(true)) / L_{xy}(true)",nbinsresol,resolmin,resolmax);
+        ";(L_{xyz} - L_{xyz}(true)) / L_{xyz}(true)",nbinsresol,resolmin,resolmax);
   }
 
   cout << "CreateHistos: " << hGen << " " << hRec << " " << hEff << endl;
@@ -1245,7 +1489,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
   }
 
   ////// Single muon efficiency weighting (RD/MC)
-  string postfix[] = {"All", "0010", "1020", "2050", "50100"};
+  string postfix[] = {"All"}; //, "0010", "1020", "2050", "50100"};
   const int ngraph = sizeof(postfix)/sizeof(string);
 /*  TGraphAsymmErrors *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
   for (int i=0; i<ngraph; i++) {
@@ -1281,8 +1525,39 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
   }
   ////// End of single muon efficiency weighting (RD/MC)
 
+  // Make a map from event list
+  map<int, int> mapEvtList;
+  map<int, int>::iterator it_map;
+  if (use3DCtau) {
+    fstream LifetimeEntryList;
+    if (npmc) LifetimeEntryList.open("./EntryList_NPMC.txt",fstream::in);
+    else LifetimeEntryList.open("./EntryList_PRMC.txt",fstream::in);
+
+    cout << "Start reading EntryList_" ;
+    if (npmc) cout << "NPMC.txt" << endl;
+    else cout << "PRMC.txt" << endl;
+
+    while (LifetimeEntryList.good()) {
+      int evFull, evLxyz;
+      unsigned int runnum, evtnum;
+      double rap, pt, phi;
+
+      LifetimeEntryList >> rap >> pt >> phi >> evtnum >> evFull >> evLxyz;
+//      cout << rap << " " << pt << " " << phi << " " << evtnum << " " << evFull << " " << evLxyz << endl;
+      try {
+        mapEvtList.at(evFull);
+        if (mapEvtList.at(evFull) != evLxyz) {
+          cout << "Duplicate evFull has found: " << evFull << " " << mapEvtList.at(evFull) << endl;
+          cout << "Duplicate evFull has different evLxyz. Should check EntryList.txt file and re-do!" << endl;
+        }
+      } catch (const std::out_of_range& oor) {
+        mapEvtList[evFull] = evLxyz;
+        cout << evFull << "\t" << evLxyz << endl;
+      }
+    }
+  } // End of making map for event list
+
   double weight = 0;
-//  for (int ev=0; ev<1000000; ev++) {
   for (int ev=0; ev<totalEvt; ev++) {
     if (ev%10000 == 0)
       cout << "LoopTree: " << "event # " << ev << " / " << totalEvt << endl;
@@ -1309,6 +1584,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
       double dctaureco = Reco_QQ_ctau[iRec];
       double dlxy = dctau*dpt/3.096916;
       double dlxyreco = dctaureco*dpt/3.096916;
+
       if ( isMuonInAccept(recoMu1) && isMuonInAccept(recoMu2) &&
            recoDiMu->M() > 2.95 && recoDiMu->M()< 3.25 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] &&
@@ -1326,6 +1602,35 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
           if ( !((HLTriggers&2)==2 && (Reco_QQ_trig[iRec]&2)==2)) continue;
         }
 
+        // If 3D ctau is going to be used
+        if (use3DCtau) {
+          int eventLxyz = 0;
+          try {
+            eventLxyz = mapEvtList.at(ev);
+          } catch (const std::out_of_range& oor) {
+            cout << "Skip this event in RECO because it's not in mapEvtList " << ev << endl;
+            continue; // Skip this event, which will not be used in the end!
+          } 
+          if (nFiles==1) treeLxyz->GetEntry(eventLxyz);
+          else chainLxyz->GetEntry(eventLxyz);
+
+          cout << "event\teventLxyz " << ev << "\t" << eventLxyz << endl;
+
+          TLorentzVector* JPLxyz = new TLorentzVector;
+          for (int j=0; j<Reco_QQ_sizeLxyz; ++j) {
+            TLorentzVector *JPLxyz = (TLorentzVector*)Reco_QQ_4momLxyz->At(j);
+            if ((JPLxyz->M() == recoDiMu->M()) && (JPLxyz->Pt() == recoDiMu->Pt()) && (JPLxyz->Rapidity() == recoDiMu->Rapidity())) {
+                double dp = recoDiMu->P();
+                dctau = Reco_QQ_ctauTrue3D[j]*10;
+                dctaureco = Reco_QQ_ctau3D[j];
+                dlxy = dctau*dp/3.096916;
+                dlxyreco = dctaureco*dp/3.096916;
+                cout << "Apply Lxyz RECO!" << endl;
+            }
+          }
+          delete JPLxyz;
+        } // end of loading 3D ctau information
+        
         // Get weighting factors
         double NcollWeight = findCenWeight(centrality);
         double singleMuWeight = 1;
@@ -1493,6 +1798,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
       double dpt = genDiMu.Pt();
       double dctau = Gen_QQ_ctau[iGen] * 10;
       double dlxy = dctau*dpt/3.096916;
+
       if ( isMuonInAccept(genMu1) && isMuonInAccept(genMu2) &&
            genDiMu.M() > 2 && genDiMu.M()< 4 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] 
@@ -1502,6 +1808,35 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
         } else {
           if (!(drap >= yarray[0] && drap <= yarray[nbinsy-1])) continue;
         }
+
+        // If 3D ctau is going to be used
+        if (use3DCtau) {
+          int eventLxyz = 0;
+          try {
+            eventLxyz = mapEvtList.at(ev);
+          } catch (const std::out_of_range& oor) {
+            cout << "Skip this event in GEN because it's not in mapEvtList " << ev << endl;
+            continue; // Skip this event, which will not be used in the end!
+          } 
+          if (nFiles==1) treeLxyz->GetEntry(eventLxyz);
+          else chainLxyz->GetEntry(eventLxyz);
+
+          cout << "GEN event\teventLxyz " << ev << "\t" << eventLxyz << " " << Gen_QQ_sizeLxyz<< endl;
+
+          TLorentzVector* JPLxyz = new TLorentzVector;
+          for (int j=0; j<Gen_QQ_sizeLxyz; ++j) {
+            TLorentzVector *JPLxyz = (TLorentzVector*)Gen_QQ_4momLxyz->At(j);
+            if ( TMath::Abs(JPLxyz->M()-genDiMu.M())<JPLxyz->M()*1E-3 && TMath::Abs(JPLxyz->Pt()-genDiMu.Pt())<JPLxyz->Pt()*1E-3 && TMath::Abs(JPLxyz->Rapidity()-genDiMu.Rapidity())*1E-3) {
+                double dp = genDiMu.P();
+                dctau = Gen_QQ_ctau3D[j] * 10;
+                dlxy = dctau*dp/3.096916;
+                cout << "Apply Lxyz GEN!" << endl;
+//            } else {
+//              cout << "GEN skipped for " << j << " " << JPLxyz->M() << " " <<  genDiMu.M() << " " << JPLxyz->Pt() << " " << genDiMu.Pt() << " " << JPLxyz->Rapidity() << " " << genDiMu.Rapidity() << endl;
+            }
+          }
+          delete JPLxyz;
+        } // end of loading 3D ctau information
 
         double NcollWeight = findCenWeight(centrality);
         // Differential histograms

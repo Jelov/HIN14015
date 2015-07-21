@@ -42,11 +42,13 @@ int main(int argc, char *argv[]) {
   if (npmc) {
     string filelist[] = {
       "/home/mihee/cms/oniaTree/2013pp/NPMC_Histos_2013pp_GlbGlb_STARTHI53_V28-v1_GenCtau_muLessPV.root"
-      //   "root://eoscms/eos/cms/store/group/phys_heavyions/dileptons/Data2013/pp/Prompt/TTrees/home/mihee/cms/oniaTree/2013pp/NPMC_Histos_2013pp_GlbGlb_STARTHI53_V28-v1_GenCtau_muLessPV.root"
+    };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_jpsiMuMu_GlbGlb_Histos_v1.root"
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *NPMC = new EffMC(nfiles,filelist,"NPJpsi",absRapidity,true,isPbPb);
+    EffMC *NPMC = new EffMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb);
     NPMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     NPMC->SetTree();
     NPMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
@@ -56,11 +58,13 @@ int main(int argc, char *argv[]) {
   } else {
     string filelist[] = {
       "/home/mihee/cms/oniaTree/2013pp/PRMC_Histos_2013pp_GlbGlb_STARTHI53_V28-v1_GenCtau_muLessPV.root"
-      //  "root://eoscms/eos/cms/store/group/phys_heavyions/dileptons/Data2013/pp/Prompt/TTrees/home/mihee/cms/oniaTree/2013pp/PRMC_Histos_2013pp_GlbGlb_STARTHI53_V28-v1_GenCtau_muLessPV.root"
+    };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_bJpsiMuMu_GlbGlb_Histos_v1.root"
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *PRMC = new EffMC(nfiles,filelist,"PRJpsi",absRapidity,false,isPbPb);
+    EffMC *PRMC = new EffMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
     PRMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     PRMC->SetTree();
     PRMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);

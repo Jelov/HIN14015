@@ -46,7 +46,7 @@ weight=1  #0: Do NOT weight, 1: Do weight + extended ML fit, 2: Do weight + norm
 eventplane="etHF" # Name of eventplane (etHFp, etHFm, etHF(default))
 runOpt=4 # Inclusive mass fit (options: 4(default), 3(Constrained fit), 5(_mb in 2010 analysis))
 ctauErrOpt=0 # 2: Not apply ctau error range, 1: get ctau error range on the fly, 0: read ctau error range from a file (fit_ctauErrorRange)
-ctauErrFile=/afs/cern.ch/user/m/miheejo/public/HIN-14-005/FitScripts/PbPb_noWeighted_fit_ctauErrorRange_step8 # Location of ctau error range file
+ctauErrFile=/afs/cern.ch/user/m/miheejo/public/HIN-14-005/FitScripts/PbPb_noWeighted_fit_ctauErrorRange_Lxyz # Location of ctau error range file
 anaBct=1 #0: do b-fit(not-analytic fit for b-lifetime), 1: do b-fit(analytic fit for b-lifetime), 2: do NOT b-fit
 #0: 2 Resolution functions & fit on data, 1: 1 Resolution function & fit on data,
 #2: 2 Resolution functions & fit on PRMC, 3: 1 Resolution function & fit on PRMC

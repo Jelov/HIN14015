@@ -22,9 +22,9 @@
 using namespace std;
 
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
- // if (ptmax<=6.5) return true;
-//  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
- // else return false;
+//  if (ptmax<=6.5) return true;
+  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
+  else return false;
 return false;
 }
 
@@ -403,7 +403,7 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
           gpull[i]->SetPoint(d,gx,(fitValue-gy)/gy);
         }
         SetHistStyle(gpull[i],c,b,-1,1);
-        gpull[i]->GetXaxis()->SetTitle("L_{xy} (Reco) (mm)");
+        gpull[i]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         gpull[i]->GetYaxis()->SetTitle("(#varepsilon_{fit}-#varepsilon)/#varepsilon");
         gpull[i]->GetXaxis()->SetLabelSize(0.09);
         gpull[i]->GetYaxis()->SetLabelSize(0.08);
@@ -454,7 +454,8 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
       leg->Draw();
 
       lat->SetTextSize(0.030);
-      lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
+      if (isPbPb) lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
+      else lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
       for (int c=0; c<nbinscent; c++) {
         int centmin=centarray[c]; int centmax=centarray[c+1];
 
@@ -469,7 +470,7 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
         lat->DrawLatex(0.70,0.74-(c*0.20),Form("p0 = %.2f #pm %.3f",fitf->GetParameter(0),fitf->GetParError(0)));
         lat->DrawLatex(0.70,0.71-(c*0.20),Form("p1 = %.2f #pm %.3f",fitf->GetParameter(1),fitf->GetParError(1)));
         lat->DrawLatex(0.70,0.68-(c*0.20),Form("p2 = %.2f #pm %.3f",fitf->GetParameter(2),fitf->GetParError(2)));
-        lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
+        if (isPbPb) lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
       }
       lat->SetTextSize(0.042);
       lat->SetTextColor(kBlack);
@@ -512,19 +513,19 @@ void PerformUnfolding(TH1D *recoLxyCorr[], TH1D *recoLxyCorr_LowPt[]) {
   TH1D *genLxy[nHistEff], *recoLxy[nHistEff], *recoLxy_LowPt[nHistForwEff];
   
   // Fill up Reco-Gen 2D hist
-  TH2D *lxyRecoGen = new TH2D("lxyRecoGen",";L_{xy} (Reco) (mm);L_{xy} (Gen) (mm);",nbinsrecoctau,recoctauarray,nbinsctau,ctauarray);
+  TH2D *lxyRecoGen = new TH2D("lxyRecoGen",";L_{xyz} (Reco) (mm);L_{xyz} (Gen) (mm);",nbinsrecoctau,recoctauarray,nbinsctau,ctauarray);
 //  chain->Draw("Gen_QQ_ctau*Gen_QQ_4mom.Pt()/3.096916:Reco_QQ_ctau*Reco_QQ_4mom.Pt()/3.096916>>lxyRecoGen",cutStr2D.c_str(),"");
   chain->Draw("Reco_QQ_ctauTrue*Reco_QQ_4mom.Pt()/3.096916:Reco_QQ_ctau*Reco_QQ_4mom.Pt()/3.096916>>lxyRecoGen",cutStr2D.c_str(),"");
 
   TUnfold unfold(lxyRecoGen,TUnfold::kHistMapOutputVert);
   double tau=1E-4;
   double biasScale =0;
-  recoLxy[0] = new TH1D("recoLxy",";L_{xy} (Reco) (mm);",nbinsrecoctau,recoctauarray);
+  recoLxy[0] = new TH1D("recoLxy",";L_{xyz} (Reco) (mm);",nbinsrecoctau,recoctauarray);
   chain->Draw("Reco_QQ_ctau*Reco_QQ_4mom.Pt()/3.096916>>recoLxy",cutStr2D.c_str(),"");
-  genLxy[0] = new TH1D("genLxy",";L_{xy} (Gen) (mm);",nbinsctau,ctauarray);
+  genLxy[0] = new TH1D("genLxy",";L_{xyz} (Gen) (mm);",nbinsctau,ctauarray);
   chain->Draw("Reco_QQ_ctauTrue*Reco_QQ_4mom.Pt()/3.096916>>genLxy",cutStr2D.c_str(),"");
   unfold.DoUnfold(tau,recoLxy[0],biasScale);
-  recoLxyCorr[0]= unfold.GetOutput(Form("recoLxyCorr_"),";L_{xy} (Gen) (mm);");
+  recoLxyCorr[0]= unfold.GetOutput(Form("recoLxyCorr_"),";L_{xyz} (Gen) (mm);");
   
   TLatex *lat = new TLatex(); lat->SetNDC();
   TLegend *leg = new TLegend(0.29,0.62,0.7,0.75);
@@ -563,8 +564,8 @@ void PerformUnfolding(TH1D *recoLxyCorr[], TH1D *recoLxyCorr_LowPt[]) {
   lat->DrawLatex(0.3,0.83,"|y|<1.6, 6.5<p_{T}<30 GeV/c");
   lat->DrawLatex(0.3,0.78,"1.6<|y|<2.4, 3<p_{T}<30 GeV/c");
 
-  leg->AddEntry(genLxy[0],"L_{xy} (Gen)","pl");
-  leg->AddEntry(recoLxyCorr[0],"L_{xy} (Reco unfolded)","pl");
+  leg->AddEntry(genLxy[0],"L_{xyz} (Gen)","pl");
+  leg->AddEntry(recoLxyCorr[0],"L_{xyz} (Reco unfolded)","pl");
   leg->Draw();
 
   plot.SaveAs("recoLxyCorr.pdf");
@@ -573,7 +574,7 @@ void PerformUnfolding(TH1D *recoLxyCorr[], TH1D *recoLxyCorr_LowPt[]) {
 //  TH1D *recolxytest = new TH1D("recolxytest","",1,0,1);
 //  recolxytest->Fill(0.5);
 //  unfold.DoUnfold(tau,recolxytest,biasScale);
-//  recoLxyCorr[0]= unfold.GetOutput(Form("recoLxyCorr_"),";L_{xy} (Gen) (mm);");
+//  recoLxyCorr[0]= unfold.GetOutput(Form("recoLxyCorr_"),";L_{xyz} (Gen) (mm);");
   
   
   delete recoLxy[0];
@@ -623,29 +624,23 @@ int main(int argc, char *argv[]) {
   
 //  const int _centarr_pbpb[] = {0, 4, 8, 12, 24, 40};
 //  const int _centforwarr_pbpb[] = {0, 4, 8, 12, 24, 40};
+//  const int _centarr_pbpb[]     = {0, 8, 40};
+//  const int _centforwarr_pbpb[] = {0, 8, 40};
   const int _centarr_pbpb[]     = {0, 40};
   const int _centforwarr_pbpb[] = {0, 40};
   const int _centarr_pp[]       = {0, 40};
   const int _centforwarr_pp[]   = {0, 40};
-//  const double ptarr[] = {6.5, 8.5, 10.5, 13, 30};
-//  const double ptforwarr[] = {3.0, 6.5, 8.5, 10.5, 13, 30};
-//  const double raparr[] = {0.0, 0.4, 0.8, 1.2, 1.6};
-//  const double rapforwarr[] = {1.6, 2.0, 2.4};
-//  const double _ptarr[] = {6.5, 8.5, 12.5, 30};
-//  const double _ptforwarr_pbpb[] = {3.0, 6.5, 8.5, 12.5, 30}; //PbPb
-//  const double _ptforwarr_pp[] = {3.0, 6.5, 8.5, 12.5, 30}; //pp
-  const double _ptarr_pbpb[]       = {6.5, 8.5, 11.0, 16.0, 30};
-  const double _ptarr_pp[]         = {6.5, 7.5, 8.5, 9.5, 11.0, 13.0, 16.0, 30};
-  const double _ptforwarr_pbpb[]   = {3.0, 6.5, 8.5, 11.0, 16.0, 30}; //PbPb
-  const double _ptforwarr_pp[]     = {3.0, 5.5, 6.5, 7.5, 8.5, 9.5, 11.0, 13, 16.0, 30}; //pp
+  const double _ptarr_pbpb[]       = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _ptarr_pp[]         = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _ptforwarr_pp[]     = {3.0, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30}; //pp
   const double _raparr_abs[]       = {0.0, 0.8, 1.6};
   const double _rapforwarr_abs[]   = {1.6, 2.4};
   const double _raparr_noabs[]     = {-1.6, -0.8, 0.0, 0.8, 1.6};
   const double _rapforwarr_noabs[] = {-2.4, -1.6, 1.6, 2.4};
-//  const double _ctauarray[] = {0, 0.5, 1, 3};
-  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0}; 
-//  const double _ctauforwarray[] = {0, 0.3, 0.6, 0.8, 1.0, 1.5, 2.0, 3.0};
-  const double _ctauforwarray[]    = {0, 0.3, 0.7, 1.1, 1.6, 2.0, 3.0};
+  const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0}; 
+//  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0};
+  const double _ctauforwarray[]    = {0, 0.4, 0.8, 1.2, 1.6, 3.0};
   const double recoctauarray[]     = {-2, 0, 0.5, 1, 3, 5};
   const unsigned int nbinsrecoctau = sizeof(recoctauarray)/sizeof(double) -1;
   const unsigned int nbinsforwctau = sizeof(_ctauforwarray)/sizeof(double) -1;
@@ -700,19 +695,19 @@ int main(int argc, char *argv[]) {
   TFile *output;
 
   if (isPbPb) {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEta";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyzBin2";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pbpb.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pbpb_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/lxyTrueReco_RLxy1_TLxy0.01.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/lxyzTrueReco_RLxyz1_TLxyz0.01.root",dirPath.c_str());
   } else {
     dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pp.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pp_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/lxyTrueReco_RLxy1_TLxy0.01.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/lxyzTrueReco_RLxyz1_TLxyz0.01.root",dirPath.c_str());
   }
   if (absRapidity) {
     sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
@@ -776,15 +771,15 @@ int main(int argc, char *argv[]) {
       for (unsigned int c=0; c<nCentArr; c++) {
         unsigned int nidx = a*nPtArr*nCentArr + b*nCentArr + c;
 
-        string fitname = Form("lxyTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
+        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
                          raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         // lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get("lxyTrueReco_pfy");
+        lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get("lxyzTrueReco_pfy");
  
-        fitname = Form("lxyTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
+        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                          raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         //lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyTrueReco");
+        lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyzTrueReco");
        
         if (isForwardLowpT(raparr[a], raparr[a+1], ptarr[b], ptarr[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
@@ -814,21 +809,21 @@ int main(int argc, char *argv[]) {
   
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        heffSimUnf[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffSimUnf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
 
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        heffProf[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffProf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        heffUnf[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffUnf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         
         fitname = Form("heffRatio_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        heffRatio[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);(#varepsilon_{Profile}-#varepsilon_{Weighting})/#varepsilon_{Weighting}",nbinsctau,ctauarr);
+        heffRatio[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);(#varepsilon_{Profile}-#varepsilon_{Weighting})/#varepsilon_{Weighting}",nbinsctau,ctauarr);
       }
     }
   }
@@ -840,15 +835,15 @@ int main(int argc, char *argv[]) {
         if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
         unsigned int nidx = a*nPtForwArr*nCentForwArr + b*nCentForwArr + c; 
              
-        string fitname = Form("lxyTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
+        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
                          rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
 //        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile_LowPt->Get(fitname.c_str());
-        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile_LowPt->Get("lxyTrueReco_pfy");
+        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile_LowPt->Get("lxyzTrueReco_pfy");
         
-        fitname = Form("lxyTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
+        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                          rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
 //        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyTrueReco");
+        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyzTrueReco");
         
         if (isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
@@ -878,20 +873,20 @@ int main(int argc, char *argv[]) {
 
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        heffSimUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffSimUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
         
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        heffProf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffProf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        heffUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
+        heffUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         fitname = Form("heffRatio_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        heffRatio_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xy} (Reco) (mm);(#varepsilon_{Profile}-#varepsilon_{Weighting})/#varepsilon_{Weighting}",nbinsctau,ctauarr);
+        heffRatio_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);(#varepsilon_{Profile}-#varepsilon_{Weighting})/#varepsilon_{Weighting}",nbinsctau,ctauarr);
 
       }
     }
@@ -1002,7 +997,7 @@ int main(int argc, char *argv[]) {
 
         geffSimUnf[nidx] = new TGraphAsymmErrors(heffSimUnf[nidx]);
         geffSimUnf[nidx]->SetName(Form("%s_GASM",heffSimUnf[nidx]->GetName()));
-        geffSimUnf[nidx]->GetXaxis()->SetTitle("L_{xy} (Reco) (mm)");
+        geffSimUnf[nidx]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         geffSimUnf[nidx]->GetYaxis()->SetTitle("Efficiency");
 
         // Move Lxy to <Lxy>
@@ -1027,15 +1022,11 @@ int main(int argc, char *argv[]) {
 
         feffSimUnf[nidx]->SetParameters(0.5,4,8,0.2);
         if (isPbPb) {
-          if (ymin==0 && ymax==0.6 && ptmin==6.5 && ptmax==8.0 && centmin==0 && centmax==8)
-            feffSimUnf[nidx]->SetParameters(0.5,4,8,0.2);
-          else if (ymin==0 && ymax==0.6 && ptmin==6.5 && ptmax==8.0 && centmin==8 && centmax==40)
-            feffSimUnf[nidx]->SetParameters(0.16,1.10,0.26,0.35);
-          else if (ymin==0 && ymax==0.6 && ptmin==8 && ptmax==10 && centmin==8 && centmax==16)
-            feffSimUnf[nidx]->SetParameters(0.16,1.10,0.26,0.25);
-          else if (ymin==0 && ymax==0.6 && ptmin==8 && ptmax==10 && centmin==16 && centmax==40)
-            feffSimUnf[nidx]->SetParameters(0.16,1.10,0.26,0.25);
-        } else {
+          if (ymin==0.8 && ymax==1.6 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==8) {
+            feffSimUnf[nidx]->SetParameters(0.23,1.35,0.55,0.33);
+            feffSimUnf[nidx]->FixParameter(2,0.55);
+          }
+        } else { //pp
           if (( (ymin==-0.8 && ymax==0.0)||(ymin== 0.0 && ymax==0.8) ) && ptmin==11.0 && ptmax==13.0) {
                   //But this bin always fails because of its shape
                   feffSimUnf[nidx]->SetParameters(0.6,4,8,0.2);
@@ -1088,10 +1079,10 @@ int main(int argc, char *argv[]) {
         }
 
         for (unsigned int d=0; d<nbinsctau; d++) {
-          int firstybin = lxyTrueReco[nidx]->GetYaxis()->FindBin(ctauarr[d]);
-          int lastybin = lxyTrueReco[nidx]->GetYaxis()->FindBin(ctauarr[d+1]-0.00001);
+          int firstybin = lxyTrueReco_LowPt[nidx]->GetYaxis()->FindBin(ctauarr[d]);
+          int lastybin = lxyTrueReco_LowPt[nidx]->GetYaxis()->FindBin(ctauarr[d+1]-0.00001);
 
-          TH1D *projX = (TH1D*)lxyTrueReco[nidx]->ProjectionX(
+          TH1D *projX = (TH1D*)lxyTrueReco_LowPt[nidx]->ProjectionX(
               Form("projX_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_lxy%.2f-%.2f",
               rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1],ctauarr[d],ctauarr[d+1]),
               firstybin,lastybin);
@@ -1166,7 +1157,7 @@ int main(int argc, char *argv[]) {
 
         geffSimUnf_LowPt[nidx] = new TGraphAsymmErrors(heffSimUnf_LowPt[nidx]);
         geffSimUnf_LowPt[nidx]->SetName(Form("%s_GASM",heffSimUnf_LowPt[nidx]->GetName()));
-        geffSimUnf_LowPt[nidx]->GetXaxis()->SetTitle("L_{xy} (Reco) (mm)");
+        geffSimUnf_LowPt[nidx]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         geffSimUnf_LowPt[nidx]->GetYaxis()->SetTitle("Efficiency");
 
         // Move Lxy to <Lxy>
@@ -1191,19 +1182,23 @@ int main(int argc, char *argv[]) {
 
         feffSimUnf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
         if (isPbPb) {
-          if (ymin==1.6 && ymax==2.4 && ptmin==3.0 && ptmax==6.5 && centmin==0 && centmax==8) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.1,1.07,0.49,0.11);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==6.5 && ptmax==8.0 && centmin==8 && centmax==40) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.16,1.3,0.47,0.21);
+          if (ymin==1.6 && ymax==2.4 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.08,0.98,0.43,0.08);
+            feffSimUnf_LowPt[nidx]->FixParameter(2,0.43);
+          } else if (ymin==1.6 && ymax==2.4 && ptmin==5.5 && ptmax==6.5 && centmin==0 && centmax==8) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.96,0.47,0.11);
             feffSimUnf_LowPt[nidx]->FixParameter(2,0.47);
-          } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3.0 && ptmax==6.5 && centmin==0 && centmax==8) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.1,1.07,0.49,0.11);
-          } else if (ymin==-2.4 && ymax==-1.6 && ptmin==6.5 && ptmax==8.0 && centmin==0 && centmax==8) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.49,1.68,3.02,0.10);
-//            feffSimUnf_LowPt[nidx]->FixParameter(0,0.49);
-            feffSimUnf_LowPt[nidx]->FixParameter(1,1.68);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,3.02);
-//            feffSimUnf_LowPt[nidx]->FixParameter(3,0.10);
+          } else if (ymin==1.6 && ymax==2.4 && ptmin==6.5 && ptmax==7.5 && centmin==8 && centmax==40) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.25,1.2,1.27,0.21);
+          } else if (ymin==1.6 && ymax==2.4 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==40) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.21,1.21,0.80,0.21);
+            feffSimUnf_LowPt[nidx]->FixParameter(2,0.80);
+          } else if (ymin==1.6 && ymax==2.4 && ptmin==10 && ptmax==12 && centmin==0 && centmax==40) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.18,1.57,0.55,0.33);
+            feffSimUnf_LowPt[nidx]->FixParameter(2,0.55);
+          } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
+            feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.93,0.22,0.08);
+            feffSimUnf_LowPt[nidx]->FixParameter(2,0.22);
           }
         } else {
         }
@@ -1305,7 +1300,7 @@ int main(int argc, char *argv[]) {
 
         geffProf[nidx] = new TGraphAsymmErrors(heffProf[nidx]);
         geffProf[nidx]->SetName(Form("%s_GASM",heffProf[nidx]->GetName()));
-        geffProf[nidx]->GetXaxis()->SetTitle("L_{xy} (Reco) (mm)");
+        geffProf[nidx]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         geffProf[nidx]->GetYaxis()->SetTitle("Efficiency");
 
         // Move Lxy to <Lxy>
@@ -1429,7 +1424,7 @@ int main(int argc, char *argv[]) {
 
         geffProf_LowPt[nidx] = new TGraphAsymmErrors(heffProf_LowPt[nidx]);
         geffProf_LowPt[nidx]->SetName(Form("%s_GASM",heffProf_LowPt[nidx]->GetName()));
-        geffProf_LowPt[nidx]->GetXaxis()->SetTitle("L_{xy} (Reco) (mm)");
+        geffProf_LowPt[nidx]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         geffProf_LowPt[nidx]->GetYaxis()->SetTitle("Efficiency");
 
         double ymin=rapforwarr[a]; double ymax=rapforwarr[a+1];
@@ -1507,12 +1502,12 @@ int main(int argc, char *argv[]) {
         TUnfold unfold1(lxyRecoGen,TUnfold::kHistMapOutputVert);
         double tau1=1E-4;
         double biasScale1 =0;
-        recoLxy[nidx] = new TH1D(Form("recoLxy_%s",range),";L_{xy} (Reco) (mm);",nbinsrecoctau,recoctauarray);
+        recoLxy[nidx] = new TH1D(Form("recoLxy_%s",range),";L_{xyz} (Reco) (mm);",nbinsrecoctau,recoctauarray);
         chain->Draw(Form("Reco_QQ_ctau*Reco_QQ_4mom.Pt()/3.096916>>recoLxy_%s",range),cutStr1D.c_str(),"");
-        genLxy[nidx] = new TH1D(Form("genLxy_%s",range),";L_{xy} (Gen) (mm);",reconbinsctau,recoctauarray);
+        genLxy[nidx] = new TH1D(Form("genLxy_%s",range),";L_{xyz} (Gen) (mm);",reconbinsctau,recoctauarray);
         chain->Draw(Form("Reco_QQ_ctauTrue*Reco_QQ_4mom.Pt()/3.096916>>genLxy_%s",range),cutStr1D.c_str(),"");
         unfold.DoUnfold(tau1,recoLxy[nidx],biasScale1);
-        recoLxyCorr[nidx]= unfold1.GetOutput(Form("recoLxyCorr_%s",range),";L_{xy} (Gen) (mm);");
+        recoLxyCorr[nidx]= unfold1.GetOutput(Form("recoLxyCorr_%s",range),";L_{xyz} (Gen) (mm);");
         
       }
     }

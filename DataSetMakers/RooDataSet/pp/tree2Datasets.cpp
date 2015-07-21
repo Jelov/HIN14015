@@ -1,12 +1,16 @@
 #include <iostream>
 #include <math.h>
 #include <fstream>
+#include <utility>
+#include <map>
+#include <stdexcept>
 
 #include <TROOT.h>
 #include <TFile.h>
 #include <TVector3.h>
 #include "TH1F.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TF1.h"
 #include "TFitResult.h"
 #include "TLorentzVector.h"
@@ -23,6 +27,7 @@
 
 #include <TCanvas.h>
 #include "TStyle.h"
+#include "TPaletteAxis.h"
 
 
 //-1: etHFp+etHFm combined without auto-correlation
@@ -52,16 +57,19 @@ static int runType = 0;
 //0 : DO NOT weight, 1: Apply weight
 static bool doWeighting = false;
 
+//0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
+static bool use3DCtau = false;
+
 //0: don't care about RPAng, 1: Pick events with RPAng != -10
 static bool checkRPNUM = false;
 
 static const double Jpsi_MassMin=2.6;
 static const double Jpsi_MassMax=3.5;
-static const double Jpsi_PtMin=0.0;
-static const double Jpsi_PtMax=100;
+static const double Jpsi_PtMin=3.0;
+static const double Jpsi_PtMax=30;
 static const double Jpsi_YMin=0;
 static const double Jpsi_YMax=2.4;
-static const double Jpsi_CtMin = -3.0;
+static const double Jpsi_CtMin = -5.0;
 static const double Jpsi_CtMax = 5.0;
 static const double Jpsi_CtErrMin = 0.0;
 static const double Jpsi_CtErrMax = 1.0;
@@ -82,7 +90,7 @@ const bool isPbPb = false;
 const int centarr[] = {0, 40};
 const int centforwarr[] = {0, 40};
 const double ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30.0};
-const double ptforwarr[] = {3.0, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30.0};
+const double ptforwarr[] = {3.0, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30.0};
 const double raparr[] = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
 const double rapforwarr[] = {-2.4, -2.0, -1.6, 1.6, 2.0, 2.4};
 const unsigned int nCentArr = sizeof(centarr)/sizeof(int) -1;
@@ -97,8 +105,8 @@ const unsigned int nHistForwEff = nCentForwArr * nPtForwArr * nRapForwArr;
 // Binning for Lxy efficiency curves
 const int _centarr[] = {0, 40};
 const int _centforwarr[] = {0, 40};
-const double _ptarr[] = {6.5, 7.5, 8.5, 9.5, 11.0, 13.0, 16.0, 30}; 
-const double _ptforwarr[] = {3.0, 5.5, 6.5, 7.5, 8.5, 9.5, 11.0, 13.0, 16.0, 30};
+const double _ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+const double _ptforwarr[] = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
 const double _raparr[] = {-1.6, -0.8, 0.0, 0.8, 1.6};
 const double _rapforwarr[] = {-2.4, -1.6, 1.6, 2.4};
 const unsigned int _nCentArr = sizeof(_centarr)/sizeof(int) -1;
@@ -112,13 +120,17 @@ const unsigned int _nHistForwEff = _nCentForwArr * _nPtForwArr * _nRapForwArr;
 
 TF1 *feffPt[nRapArr * nCentArr], *feffPt_LowPt[nRapArr * nCentArr];
 TF1 *feffLxy[_nHistEff], *feffLxy_LowPt[_nHistForwEff];
+TH1D *heffLxy[_nHistEff], *heffLxy_LowPt[_nHistForwEff];
 TH1D *heffEmpty[nRapArr * nCentArr], *heffEmpty_LowPt[nRapArr * nCentArr];
 TH1D *heffCentCow[nHistEff], *heffCentCow_LowPt[nHistForwEff];
 TH1D *heffCentSai[nHistEff], *heffCentSai_LowPt[nHistForwEff];
 
+TH2D *hLxyCtau[nHistEff], *hLxyCtau_LowPt[nHistForwEff];
+TH2D *hLxyCtau2[10];
+
 // Variables for a dimuon
 struct Condition {
-  double theMass, theRapidity, thePt, theCentrality;
+  double theMass, theRapidity, thePt, theP, theCentrality;
   double thePhi, thedPhi, thedPhi22, thedPhi23;
   double vprob, theCt, theCtErr, zVtx, theEff;
   int HLTriggers, Reco_QQ_trig, theCat,Jq;
@@ -229,6 +241,41 @@ int main(int argc, char* argv[]) {
     return -3;
   }
 
+
+  // Settings for Lxyz information imports to normal onia tree
+  TFile *fileLxyz;
+  if (isPbPb) fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2011PbPb/Jpsi_Histos_3Mu_v2.root");
+  else fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_GlbGlb_Jpsi_Histos_3Mu_v1.root");
+
+  TTree *TreeLxyz=(TTree*)fileLxyz->Get("myTree");
+
+  unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
+  Int_t Reco_QQ_sizeLxyz;
+  Float_t Reco_QQ_ctau3D[100], Reco_QQ_ctauErr3D[100], Reco_QQ_ctauLxy[100];
+  TClonesArray *Reco_QQ_4momLxyz;
+  
+  TBranch *b_eventNbLxyz, *b_runNbLxyz, *b_LSLxyz, *b_Reco_QQ_sizeLxyz;
+  TBranch *b_Reco_QQ_ctau3D, *b_Reco_QQ_ctauErr3D, *b_Reco_QQ_ctauLxy;
+  TBranch *b_Reco_QQ_4momLxyz;
+
+  Reco_QQ_4momLxyz = 0;
+
+  if (use3DCtau) {
+    TreeLxyz->SetBranchAddress("runNb", &runNbLxyz, &b_runNbLxyz);
+    TreeLxyz->SetBranchAddress("eventNb", &eventNbLxyz, &b_eventNbLxyz);
+    TreeLxyz->SetBranchAddress("LS", &LSLxyz, &b_LSLxyz);
+
+    TreeLxyz->SetBranchAddress("Reco_QQ_size", &Reco_QQ_sizeLxyz, &b_Reco_QQ_sizeLxyz);
+    TreeLxyz->SetBranchAddress("Reco_QQ_4mom", &Reco_QQ_4momLxyz, &b_Reco_QQ_4momLxyz);
+    TreeLxyz->SetBranchAddress("Reco_QQ_ctau", Reco_QQ_ctauLxy, &b_Reco_QQ_ctauLxy);
+    TreeLxyz->SetBranchAddress("Reco_QQ_ctau3D", Reco_QQ_ctau3D, &b_Reco_QQ_ctau3D);
+    TreeLxyz->SetBranchAddress("Reco_QQ_ctauErr3D", Reco_QQ_ctauErr3D, &b_Reco_QQ_ctauErr3D);
+  }
+
+  TLorentzVector* JPLxyz = new TLorentzVector;
+
+
+  // Settings for efficiency weighting
   TFile *effFileLxy;
   TFile *effFilepT, *effFilepT_LowPt;
   TFile *effFilepT_Minus, *effFilepT_Minus_LowPt;
@@ -236,13 +283,56 @@ int main(int argc, char* argv[]) {
   TFile *effFileSailor, *effFileSailor_LowPt;
 
   
+  // Test for Lxy-Ctau 2D map
+  for (int a=0; a<10; a++) {
+    hLxyCtau2[a] = new TH2D(Form("hLxyCtau_Data_%d",a),";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+  }
+  
+  for (unsigned int a=0; a<_nRapArr; a++) {
+    for (unsigned int b=0; b<_nPtArr; b++) {
+      for (unsigned int c=0; c<_nCentArr; c++) {
+        unsigned int nidx = a*_nPtArr*_nCentArr + b*_nCentArr + c;
+        if (_raparr[a]==-1.6 && _raparr[a+1]==1.6) continue;
+                
+        hLxyCtau[nidx] = new TH2D(Form("hLxyCtau_Data_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c],_centarr[c+1])
+              ,";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+
+      }
+    }
+  }
+
+  // Forward region + including low pT bins
+  for (unsigned int a=0; a<_nRapForwArr; a++) {
+    for (unsigned int b=0; b<_nPtForwArr; b++) {
+      for (unsigned int c=0; c<_nCentForwArr; c++) {
+        if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
+        unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
+        double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
+        double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
+        double centmin=_centforwarr[c]; double centmax=_centforwarr[c+1];
+
+        hLxyCtau_LowPt[nidx] = new TH2D(Form("hLxyCtau_Data_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1])
+              ,";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+      }
+    }
+  }
+    
+    
+          
+
   if (doWeighting) {
     // 4D efficiency files
     //string dirPath = "/afs/cern.ch/user/d/dmoon/public/ForJpsiV2/4DEff/0512/";
     //string dirPath = "/afs/cern.ch/work/d/dmoon/public/ForMihee/2ndRound/";
     
-//    string dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/";
-    string dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEta/";
+    string dirPath;
+    if (use3DCtau) {
+      dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyzBin2/";
+      if (!isPbPb) dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEtaLxyz/";
+    } else {
+      dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyBin2/";
+      if (!isPbPb) dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEtaLxy/";
+    }
     char effHistname[1000];
 
 //  vector<int>centEff;
@@ -259,10 +349,13 @@ int main(int argc, char* argv[]) {
 //    cout << endl;
 
     if (trigType == 3 || trigType == 4) {
-      if (isPbPb)
-        sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/FinalEfficiency_pbpb_notAbs.root");
-      else
-        sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEta/FinalEfficiency_pp_notAbs.root");
+      if (isPbPb) {
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEtaLxyzBin2/FinalEfficiency_pbpb_notAbs.root");
+        else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEtaLxyBin2/FinalEfficiency_pbpb_notAbs.root");
+      } else {
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEtaLxyz/FinalEfficiency_pp_notAbs.root");
+        else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEtaLxy/FinalEfficiency_pp_notAbs.root");
+      }
       cout << effHistname << endl;
       effFileLxy = new TFile(effHistname);
 
@@ -319,12 +412,23 @@ int main(int argc, char* argv[]) {
               
               string fitname;
               if (!effWeight.compare("profile")) {
+                fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c],_centarr[c+1]);
+                heffLxy[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname  << " " << heffLxy[nidx] << endl;
+
                 fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c],_centarr[c+1]);
+                feffLxy[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname  << " " << feffLxy[nidx] << endl;
               } else if ( (!effWeight.compare("weightedEff")) || (effWeight.compare("profile")) ){
+                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c],_centarr[c+1]);
+                heffLxy[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname  << " " << heffLxy[nidx] << endl;
+                
                 fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c],_centarr[c+1]);
+                feffLxy[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname  << " " << feffLxy[nidx] << endl;
               }
-              feffLxy[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
-              cout << "\t" << nidx << " " << fitname  << " " << feffLxy[nidx] << endl;
+              
             }
           }
         }
@@ -359,14 +463,23 @@ int main(int argc, char* argv[]) {
               
               string fitname;
               if (!effWeight.compare("profile")) {
+                fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
+
                 fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-
+                feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
               } else if ( (!effWeight.compare("weightedEff")) || (effWeight.compare("profile")) ){
-                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-              }
-              feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
 
-              cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+              }
+              
             }
           }
         }
@@ -493,7 +606,9 @@ int main(int argc, char* argv[]) {
 
   }
 
+  UInt_t          runNb;
   UInt_t          eventNb;
+  UInt_t          LS;
   Int_t           Centrality;
   Int_t           Reco_QQ_size;
   Int_t           Reco_QQ_type[100];   //[Reco_QQ_size]
@@ -524,7 +639,9 @@ int main(int argc, char* argv[]) {
 //  Int_t           Gen_QQ_type[100];
 //  Float_t         Reco_QQ_ctauTrue[100];   //[Reco_QQ_size]
 
+  TBranch        *b_runNb;
   TBranch        *b_eventNb;
+  TBranch        *b_LS;
   TBranch        *b_Centrality;   //!
   TBranch        *b_Reco_QQ_size;   //!
   TBranch        *b_Reco_QQ_type;   //!
@@ -619,7 +736,9 @@ int main(int argc, char* argv[]) {
   Reco_QQ_mupl_4mom = 0;
   Reco_QQ_mumi_4mom = 0;
 
+  Tree->SetBranchAddress("runNb", &runNb, &b_runNb);
   Tree->SetBranchAddress("eventNb", &eventNb, &b_eventNb);
+  Tree->SetBranchAddress("LS", &LS, &b_LS);
   Tree->SetBranchAddress("Centrality", &Centrality, &b_Centrality);
   if (RPNUM == -3) {  //Not-flatten
     Tree->SetBranchAddress("NfRpAng", rpAng, &b_rpAng);
@@ -680,6 +799,18 @@ int main(int argc, char* argv[]) {
   }
 
   TH1D *JpsiPt = new TH1D("JpsiPt","JpsiPt",25,0,100);
+
+  double arrXaxis[] = {-1.5, -0.7, -0.6, -0.5, -0.467, -0.433, -0.4, -0.367, -0.333, -0.3, -0.267, -0.233, -0.2,
+    -0.19, -0.18, -0.17, -0.16, -0.15, -0.14, -0.13, -0.12, -0.11, -0.10, -0.09, -0.08, -0.07, -0.06,
+    -0.05, -0.04, -0.03, -0.02, -0.01, 0, 0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1,
+    0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2, 0.225, 0.25, 0.275, 0.3, 0.325, 0.35,
+    0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.547, 0.593, 0.640, 0.687, 0.733, 0.780, 0.827, 0.873,
+    0.920, 0.967, 1.013, 1.060, 1.107, 1.153, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0};
+  unsigned int sizeXaxis = sizeof(arrXaxis) / sizeof(double);
+  TH1D *hJpsiCtau[10];
+  for (int hidx=0; hidx<10; hidx++) {
+    hJpsiCtau[hidx] = new TH1D(Form("hJpsiCtau_%d",hidx),";#font[12]{l}_{J/#psi} (mm);0.03 mm",sizeXaxis-1,arrXaxis);
+  }
   
   const int nEvents = Tree->GetEntries();
   double *randomVar = new double[nEvents];
@@ -696,12 +827,32 @@ int main(int argc, char* argv[]) {
     randfile.close();
   }
 
+
+  // Make a map from event list
+  map<int, int> mapEvtList;
+  map<int, int>::iterator it_map;
+  if (use3DCtau) {
+    fstream LifetimeEntryList;
+    if (isPbPb) LifetimeEntryList.open("EntryList_20150529.txt",fstream::in);
+    else LifetimeEntryList.open("EntryList_20150709.txt",fstream::in);
+    cout << "LifetimeEntryList: " << LifetimeEntryList.good() << endl;
+
+    while (LifetimeEntryList.good()) {
+      int evFull, evLxyz;
+      unsigned int runnum, evtnum;
+
+      LifetimeEntryList >> runnum >> evtnum >> evFull >> evLxyz;
+      mapEvtList[evFull] = evLxyz;
+    }
+  } // End of making map for event list
+
+  // Start to process! Read tree..
   if (nevt == -1) nevt = Tree->GetEntries();
   for (int ev=initev; ev<nevt; ++ev) {
     if (ev%100000==0) cout << ">>>>> EVENT " << ev << " / " << Tree->GetEntries() <<  endl;
 
     Tree->GetEntry(ev);
-    
+ 
     float theRPAng=0, theRPAng22=0, theRPAng23=0;
 
     // Normal HI event plane setting
@@ -735,6 +886,36 @@ int main(int argc, char* argv[]) {
       Jpsi.Jq = Reco_QQ_sign[i];
       Jpsi.theCt = Reco_QQ_ctau[i];
       Jpsi.theCtErr = Reco_QQ_ctauErr[i];
+      
+      // If 3D ctau is going to be used
+      if (use3DCtau) {
+        int eventLxyz = 0;
+        try {
+          eventLxyz = mapEvtList.at(ev);
+        } catch (const std::out_of_range& oor) {
+//          cout << "Event in Lxyz root file doesn't exist" << endl;
+          continue; // Skip this event, which will not be used in the end!
+        } 
+//        cout << "eventLxyz: " << eventLxyz << endl;
+        TreeLxyz->GetEntry(eventLxyz);
+
+        TLorentzVector* JPLxyz = new TLorentzVector;
+        for (int j=0; j<Reco_QQ_sizeLxyz; ++j) {
+          TLorentzVector *JPLxyz = (TLorentzVector*)Reco_QQ_4momLxyz->At(j);
+          if ((JPLxyz->M() == JP->M()) && (JPLxyz->Pt() == JP->Pt()) && (JPLxyz->Rapidity() == JP->Rapidity())) {
+//            if (TMath::Abs(Reco_QQ_ctau[i]-Reco_QQ_ctauLxy[j]) < 1E-4*TMath::Abs(Reco_QQ_ctau[j])) {
+              Jpsi.theCt = Reco_QQ_ctau3D[j];
+              Jpsi.theCtErr = Reco_QQ_ctauErr3D[j];
+//              cout << "ctau: " << Reco_QQ_ctauLxy[j] << " ctau3D: " << Jpsi.theCt << endl;
+//              break;
+//            } else {
+//              cout << "ctau in 3D file: " << Reco_QQ_ctauLxy[j] << " ctau in 2D file: " << Jpsi.theCt << endl;
+//            }
+          }
+        }
+        delete JPLxyz;
+      }
+
       Jpsi.mupl_nMuValHits = Reco_QQ_mupl_nMuValHits[i];      
       Jpsi.mumi_nMuValHits = Reco_QQ_mumi_nMuValHits[i];      
       Jpsi.mupl_numOfMatch = Reco_QQ_mupl_numOfMatch[i];
@@ -752,6 +933,7 @@ int main(int argc, char* argv[]) {
 
       Jpsi.theMass =JP->M();
       Jpsi.theRapidity=JP->Rapidity();
+      Jpsi.theP=JP->P();
       Jpsi.thePt=JP->Pt();
       Jpsi.thePhi = JP->Phi();
 
@@ -842,14 +1024,50 @@ int main(int argc, char* argv[]) {
           Jpsi.vprob > 0.001
          ) {
 
+        // Test for event numbers in Lxy and Lxyz trees 
+        cout << "2D: " << ev << " " << runNb << " " << eventNb << endl;
+        if (use3DCtau) {
+          int eventLxyz = 0;
+          try {
+            eventLxyz = mapEvtList.at(ev);
+            cout << "3D: " << eventLxyz << " " << runNbLxyz << " " << eventNbLxyz << endl;
+          } catch (const std::out_of_range& oor) {
+          }
+        } 
+
+        // Test for Lxy-Ctau 2D map
+        if (fabs(Jpsi.theRapidity)>1.6 && fabs(Jpsi.theRapidity)<2.4 && Jpsi.thePt>3 && Jpsi.thePt<4.5) {
+          double lxy;
+          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+          hLxyCtau2[0]->Fill(lxy,Jpsi.theCt);
+        } else if (fabs(Jpsi.theRapidity)>1.6 && fabs(Jpsi.theRapidity)<2.4 && Jpsi.thePt>4.5 && Jpsi.thePt<5.5) {
+          double lxy;
+          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+          hLxyCtau2[1]->Fill(lxy,Jpsi.theCt);
+        } else if (fabs(Jpsi.theRapidity)>1.6 && fabs(Jpsi.theRapidity)<2.4 && Jpsi.thePt>5.5 && Jpsi.thePt<6.5) {
+          double lxy;
+          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+          hLxyCtau2[2]->Fill(lxy,Jpsi.theCt);
+        }
+        if (fabs(Jpsi.theRapidity)>1.6 && fabs(Jpsi.theRapidity)<2.4 && Jpsi.thePt>3 && Jpsi.thePt<6.5) {
+          double lxy;
+          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+          hLxyCtau2[3]->Fill(lxy,Jpsi.theCt);
+        }
+
         if (doWeighting) {
           double tmpPt = Jpsi.thePt;
           if (tmpPt >= 30.0) tmpPt = 29.9;
-          cout << "R: " << Jpsi.theRapidity << " P: " << tmpPt << " C: " << Centrality << " cTau: " << Jpsi.theCt<< endl;
+          cout << "R: " << Jpsi.theRapidity << " Pt: " << Jpsi.thePt << " P: " << Jpsi.theP <<  " C: " << Centrality;
+          cout << " cTau: " << Jpsi.theCt << endl;
           // 4D efficiency
           if (tmpPt >= 3 && tmpPt < 30 && fabs(Jpsi.theRapidity)>=1.6 && fabs(Jpsi.theRapidity)<2.4) {
             // Pick up a pT eff curve
-            for (unsigned int a=0; a<nRapForwArr; a++) {
+/*            for (unsigned int a=0; a<nRapForwArr; a++) {
               for (unsigned int c=0; c<nCentForwArr; c++) {
                 unsigned int nidx = a*nCentForwArr + c;
                 if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
@@ -863,7 +1081,7 @@ int main(int argc, char* argv[]) {
                 }
               }
             }
-
+*/
             if (isPbPb || !isPbPb) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapForwArr; a++) {
@@ -877,37 +1095,52 @@ int main(int argc, char* argv[]) {
                      ) {
                         cout << "\t" << feffLxy_LowPt[nidx]->GetName() << endl;
 
-                        double lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
-                        if (lxy < 0) lxy = 0;
+                        double lxy;
+                        if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+                        else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+                        //if (lxy < 0) lxy = 0;
                         if (lxy >= 3) lxy = 3;
-                        theEffLxy = feffLxy_LowPt[nidx]->Eval(lxy);
+                        if (lxy < 0) theEffLxy = feffLxy_LowPt[nidx]->Eval(-1*lxy);
+                        else theEffLxy = feffLxy_LowPt[nidx]->Eval(lxy);
                         theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
+                        if (theEffLxy <= 0) {
+                          int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
+                          double tmp_theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber); // Get content from the previous bin
+                          if (tmp_theEffLxy > 0) theEffLxy = tmp_theEffLxy;
+                          cout << "Low eff: " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
+                        }
+
+                        hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
                     }
                   }
                 }
               }
             }
-            cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt
-                 << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
-            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-            theEff = theEffLxy + theEff;
-//            if ( (isPbPb && (theEffPt==0 || theEffLxy==0 || theEff == 0)) ||
-//                 (!isPbPb && theEff == 0) ){
-            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
-              cout << "\t" << "low pT, Cannot be found in given rap, cent arrays!" << endl;
-              theEff=1;
-//            } else if ( (isPbPb && (theEffPt<0 || theEffLxy<0 || theEff<1)) ||
-//                        (!isPbPb && theEff<0) ){
-            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
-              cout << "\t" << "low pT, negative efficiency in given rap, cent arrays!" << endl;
-              theEff=0;
+            if (use3DCtau) cout << "\t" << "lxyz: " << Jpsi.theCt*Jpsi.theP/PDGJpsiM << " theEffPt: " << theEffPt;
+            else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
+            cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
+//            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+//            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+            if (theEffLxy <= 0) {           // This event is not going to be included!
+              theEff = -1;
+              cout << "  " << theEffLxy << endl;
+            } else {
+              theEff = theEffLxy;
             }
+
+//            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
+//              cout << "\t" << "low pT, Cannot be found in given rap, cent arrays!" << endl;
+//              theEff=1;
+//            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
+//              cout << "\t" << "low pT, negative efficiency in given rap, cent arrays!" << endl;
+//              theEff=0;
+//            }
             
             cout << "\t" << "final eff: " << theEff << endl;
 
           } else if (tmpPt >= 6.5 && fabs(Jpsi.theRapidity)<1.6) {
             // Pick up a pT eff curve
-            for (unsigned int a=0; a<nRapArr; a++) {
+/*            for (unsigned int a=0; a<nRapArr; a++) {
               for (unsigned int c=0; c<nCentArr; c++) {
                 unsigned int nidx = a*nCentArr + c;
                 if ( (Jpsi.theRapidity >= raparr[a] && Jpsi.theRapidity < raparr[a+1]) &&
@@ -918,8 +1151,8 @@ int main(int argc, char* argv[]) {
                     if (theEffPt<=0) heffEmpty[nidx]->Fill(tmpPt);
                 }
               }
-              
             }
+*/
             if (isPbPb || !isPbPb) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapArr; a++) {
@@ -932,31 +1165,47 @@ int main(int argc, char* argv[]) {
                        ) {
                         cout << "\t" << feffLxy[nidx]->GetName() << endl;
 
-                        double lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
-                        if (lxy < 0) lxy = 0;
+                        double lxy;
+                        if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+                        else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+                        //if (lxy < 0) lxy = 0;
                         if (lxy >= 3) lxy = 3;
-                        theEffLxy = feffLxy[nidx]->Eval(lxy);
+                        if (lxy < 0) theEffLxy = feffLxy[nidx]->Eval(-1*lxy);
+                        else theEffLxy = feffLxy[nidx]->Eval(lxy);
                         theEffLxyAt0 = feffLxy[nidx]->Eval(0);
+                        if (theEffLxy <= 0) {
+                          int binnumber = heffLxy[nidx]->FindBin(lxy);
+                          double tmp_theEffLxy = heffLxy[nidx]->GetBinContent(binnumber); // Get content from the previous bin
+                          if (tmp_theEffLxy > 0) theEffLxy = tmp_theEffLxy;
+                          cout << "Low eff: " << feffLxy[nidx]->Eval(lxy) << " & " << heffLxy[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
+                        }
+
+                        hLxyCtau[nidx]->Fill(lxy,Jpsi.theCt);
                     }
                   }
                 }
               }
             }
-            cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt
-                 << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
-            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-            theEff = theEffLxy + theEff;
-//            if ( (isPbPb && (theEffPt==0 || theEffLxy==0 || theEff == 0)) ||
-//                 (!isPbPb && theEff == 0) ){
-            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
-              cout << "\t" << "high pT, Cannot be found in given rap, cent arrays!" << endl;
-              theEff=1;
-//            } else if ( (isPbPb && (theEffPt<0 || theEffLxy<0 || theEff<0)) ||
-//                        (!isPbPb && theEff<0) ){
-            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
-              cout << "\t" << "high pT, negative efficiency in given rap, cent arrays!" << endl;
-              theEff=0;
+            if (use3DCtau) cout << "\t" << "lxyz: " << Jpsi.theCt*Jpsi.theP/PDGJpsiM << " theEffPt: " << theEffPt;
+            else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
+            cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
+//            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+//            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+            if (theEffLxy <= 0) {           // This event is not going to be included!
+              theEff = -1;
+              cout << "  " << theEffLxy << endl;
+            } else {
+              theEff = theEffLxy;
             }
+
+//            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
+//              cout << "\t" << "low pT, Cannot be found in given rap, cent arrays!" << endl;
+//              theEff=1;
+//            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
+//              cout << "\t" << "low pT, negative efficiency in given rap, cent arrays!" << endl;
+//              theEff=0;
+//            }
+
             cout << "\t" << "final eff: " << theEff << endl;
 
           } else {
@@ -1005,7 +1254,10 @@ int main(int argc, char* argv[]) {
         
         } else { theEff = 1.0; }  // end of the weighting condition
         if (theEff>0) Jpsi.theEff = 1.0/theEff;
-        else Jpsi.theEff = 0;
+        else {
+          Jpsi.theEff = 0;
+          continue;
+        }
 
         double tmpDiff = TMath::Abs(PDGJpsiM - Jpsi.theMass);
         if (runType == 4) {
@@ -1022,6 +1274,32 @@ int main(int argc, char* argv[]) {
           }
         } else {
           JpsiPt->Fill(Jpsi.thePt);
+          if (Jpsi.theMass > 2.6 && Jpsi.theMass < 3.5) {
+            if (TMath::Abs(Jpsi.theRapidity) > 1.6 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 3 && Jpsi.thePt < 4.5)
+              hJpsiCtau[0]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) > 1.6 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 4.5 && Jpsi.thePt < 5.5)
+              hJpsiCtau[1]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) > 1.6 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 5.5 && Jpsi.thePt < 6.5)
+              hJpsiCtau[2]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) > 1.6 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 6.5 && Jpsi.thePt < 30)
+              hJpsiCtau[3]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) > 1.6 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 3.0 && Jpsi.thePt < 6.5)
+              hJpsiCtau[4]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) < 1.2 && 
+                Jpsi.thePt > 6.5 && Jpsi.thePt < 30)
+              hJpsiCtau[5]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) < 1.2 && TMath::Abs(Jpsi.theRapidity) < 1.6 &&
+                Jpsi.thePt > 6.5 && Jpsi.thePt < 30)
+              hJpsiCtau[6]->Fill(Jpsi.theCt);
+            else if (TMath::Abs(Jpsi.theRapidity) < 0.0 && TMath::Abs(Jpsi.theRapidity) < 2.4 &&
+                Jpsi.thePt > 6.5 && Jpsi.thePt < 30)
+              hJpsiCtau[7]->Fill(Jpsi.theCt);
+          }
           Jpsi_Pt->setVal(Jpsi.thePt); 
           Jpsi_Y->setVal(Jpsi.theRapidity); 
           Jpsi_Phi->setVal(Jpsi.thePhi);
@@ -1120,6 +1398,7 @@ int main(int argc, char* argv[]) {
     passMostJpsi = false;
   } // End of tree event loop
 
+  gROOT->Macro("/home/mihee/rootlogon.C");
   char namefile[200];
   TCanvas *canv = new TCanvas("canv","canv",800,600);
   canv->cd();
@@ -1127,40 +1406,114 @@ int main(int argc, char* argv[]) {
   sprintf(namefile,"%s/JpsiPt.pdf",outputDir.c_str());
   canv->SaveAs(namefile);
   canv->Clear();
+  for (int nidx=0; nidx<10; nidx++) {
+    for (int bin=1; bin<=hJpsiCtau[nidx]->GetNbinsX(); bin++) {
+      double width = hJpsiCtau[nidx]->GetBinWidth(bin);
+      double normCont = hJpsiCtau[nidx]->GetBinContent(bin) / width;
+      hJpsiCtau[nidx]->SetBinContent(bin,normCont);
+    }
+    canv->SetLogy(1);
+    hJpsiCtau[nidx]->Draw();
+    sprintf(namefile,"%s/hJpsiCtau_%d.pdf",outputDir.c_str(),nidx);
+    canv->SaveAs(namefile);
+    canv->Clear();
+  }
 
   TLatex *lat = new TLatex(); lat->SetNDC(); lat->SetTextSize(0.035); lat->SetTextColor(kBlack);
-  for (unsigned int a=0; a<nRapArr; a++) {
-    for (unsigned int c=0; c<nCentArr; c++) {
-      unsigned int nidx = a*nCentArr + c;
-      if (raparr[a]==-1.6 && raparr[a+1]==1.6) continue;
-
-      if (heffEmpty[nidx]->GetEntries() != 0) {
-        canv->cd();
-        heffEmpty[nidx]->Draw("text l");
-        sprintf(namefile,"%s/EmptyEff_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d.pdf",outputDir.c_str(),raparr[a],raparr[a+1],centarr[c],centarr[c+1]);
-        lat->DrawLatex(0.45,0.8,Form("Rap%.1f-%.1f_Cent%.0f-%.0f",raparr[a],raparr[a+1],centarr[c]*2.5,centarr[c+1]*2.5));
-        canv->SaveAs(namefile);
-        canv->Clear();
+/*  TCanvas *canv2 = new TCanvas("canv2","canv2",600,600);
+  canv2->SetLeftMargin(0.15);
+  canv2->SetRightMargin(0.15);
+  canv2->SetLogz(1);
+  for (unsigned int a=0; a<_nRapArr; a++) {
+    for (unsigned int b=0; b<_nPtArr; b++) {
+      for (unsigned int c=0; c<_nCentArr; c++) {
+        if (_raparr[a]==-1.6 && _raparr[a+1]==1.6) continue;
+        unsigned int nidx = a*_nPtArr*_nCentArr + b*_nCentArr + c;
+        canv2->cd();
+        hLxyCtau[nidx]->Draw("colz");
+        canv2->Update();
+        TPaletteAxis *pal = (TPaletteAxis*)hLxyCtau[nidx]->GetListOfFunctions()->FindObject("palette");
+        pal->SetX1NDC(0.86);
+        pal->SetX2NDC(0.92);
+        pal->SetY1NDC(0.15);
+        pal->SetY2NDC(0.93);
+        lat->DrawLatex(0.2,0.8,Form("%.1f<y<%.1f, %.1f-%.1f GeV/c, %.0f-%.0f%%",
+              _raparr[a],_raparr[a+1],_ptarr[b],_ptarr[b+1],_centarr[c]*2.5,_centarr[c+1]*2.5));
+        canv2->Update();
+        canv2->SaveAs(Form("%s/%s.png",outputDir.c_str(),hLxyCtau[nidx]->GetName()));
+        canv2->Clear();
       }
     }
   }
-    
-  for (unsigned int a=0; a<nRapForwArr; a++) {
-    for (unsigned int c=0; c<nCentForwArr; c++) {
-      unsigned int nidx = a*nCentForwArr + c;
-      if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
-
-      if (heffEmpty_LowPt[nidx]->GetEntries() != 0) {
-        canv->cd();
-        heffEmpty_LowPt[nidx]->Draw("text l");
-        sprintf(namefile,"%s/EmptyEff_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d.pdf",outputDir.c_str(),rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
-        lat->DrawLatex(0.45,0.8,Form("Rap%.1f-%.1f_Cent%.0f-%.0f",rapforwarr[a],rapforwarr[a+1],centforwarr[c]*2.5,centforwarr[c+1]*2.5));
-        canv->SaveAs(namefile);
-        canv->Clear();
+  for (unsigned int a=0; a<_nRapForwArr; a++) {
+    for (unsigned int b=0; b<_nPtForwArr; b++) {
+      for (unsigned int c=0; c<_nCentForwArr; c++) {
+        unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
+        if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
+        canv2->cd();
+        hLxyCtau_LowPt[nidx]->Draw("colz");
+        canv2->Update();
+        TPaletteAxis *pal = (TPaletteAxis*)hLxyCtau_LowPt[nidx]->GetListOfFunctions()->FindObject("palette");
+        pal->SetX1NDC(0.86);
+        pal->SetX2NDC(0.92);
+        pal->SetY1NDC(0.15);
+        pal->SetY2NDC(0.93);
+        lat->DrawLatex(0.2,0.8,Form("%.1f<y<%.1f, %.1f-%.1f GeV/c, %.1f-%.1f%%",
+              _rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c]*2.5,_centforwarr[c+1]*2.5));
+        canv2->Update();
+        canv2->SaveAs(Form("%s/%s.png",outputDir.c_str(),hLxyCtau_LowPt[nidx]->GetName()));
+        canv2->Clear();
       }
     }
   }
-  
+
+  for (int a=0; a<4; a++) {
+    canv2->cd();
+    hLxyCtau2[a]->Draw("colz");
+    canv2->Update();
+    TPaletteAxis *pal = (TPaletteAxis*)hLxyCtau2[a]->GetListOfFunctions()->FindObject("palette");
+    pal->SetX1NDC(0.86);
+    pal->SetX2NDC(0.92);
+    pal->SetY1NDC(0.15);
+    pal->SetY2NDC(0.93);
+    canv2->SaveAs(Form("%s/hLxyCtau2_%d.png",outputDir.c_str(),a));
+    canv2->Clear();
+  }
+*/
+
+  if (doWeighting) {
+    for (unsigned int a=0; a<nRapArr; a++) {
+      for (unsigned int c=0; c<nCentArr; c++) {
+        unsigned int nidx = a*nCentArr + c;
+        if (raparr[a]==-1.6 && raparr[a+1]==1.6) continue;
+
+        if (heffEmpty[nidx]->GetEntries() != 0) {
+          canv->cd();
+          heffEmpty[nidx]->Draw("text l");
+          sprintf(namefile,"%s/EmptyEff_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d.pdf",outputDir.c_str(),raparr[a],raparr[a+1],centarr[c],centarr[c+1]);
+          lat->DrawLatex(0.45,0.8,Form("Rap%.1f-%.1f_Cent%.0f-%.0f",raparr[a],raparr[a+1],centarr[c]*2.5,centarr[c+1]*2.5));
+          canv->SaveAs(namefile);
+          canv->Clear();
+        }
+      }
+    }
+      
+    for (unsigned int a=0; a<nRapForwArr; a++) {
+      for (unsigned int c=0; c<nCentForwArr; c++) {
+        unsigned int nidx = a*nCentForwArr + c;
+        if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
+
+        if (heffEmpty_LowPt[nidx]->GetEntries() != 0) {
+          canv->cd();
+          heffEmpty_LowPt[nidx]->Draw("text l");
+          sprintf(namefile,"%s/EmptyEff_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d.pdf",outputDir.c_str(),rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
+          lat->DrawLatex(0.45,0.8,Form("Rap%.1f-%.1f_Cent%.0f-%.0f",rapforwarr[a],rapforwarr[a+1],centforwarr[c]*2.5,centforwarr[c+1]*2.5));
+          canv->SaveAs(namefile);
+          canv->Clear();
+        }
+      }
+    }
+  }
 
   // Perform the weighting on the dataset
   if (doWeighting) {
@@ -1211,7 +1564,7 @@ double reducedPhi(double thedPhi) {
 }
 
 bool isAccept(const TLorentzVector* aMuon) {
-  if (fabs(aMuon->Eta()) < 1.2) return true;
+  if (fabs(aMuon->Pt()) > 2.5) return true;
   else return false;
 }
 
@@ -1221,7 +1574,8 @@ bool checkRunType(const struct Condition Jpsi, const TLorentzVector* m1P, const 
     else return false;
   }
   else if (runType == 2) {
-    if (isAccept(m1P) && isAccept(m2P)) return true;
+    if (isAccept(m1P) || isAccept(m2P)) return true;
+//    if (isAccept(m1P) && isAccept(m2P)) return true;
     else return false;
   }
   else if (runType == 3) {

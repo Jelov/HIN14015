@@ -505,30 +505,33 @@ int main (int argc, char* argv[]) {
               }
 
               if (inOpt.pmin==3 && inOpt.pmax==30) {
-                ws->var("sigmaSig1")->setRange(0.01,0.077);
-                ws->var("sigmaSig2")->setRange(0.01,0.06);
-                ws->var("sigmaSig1")->setVal(0.03);
-                ws->var("sigmaSig2")->setVal(0.03);
+                ws->var("sigmaSig1")->setRange(0.01,0.09);
+                ws->var("sigmaSig2")->setRange(0.052,0.11);
+                ws->var("sigmaSig1")->setVal(0.04);
+                ws->var("sigmaSig2")->setVal(0.06);
                 if (centest && !dPhitest) {
                   ws->var("sigmaSig2")->setVal(0.013);
                 }
               } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-                ws->var("sigmaSig1")->setRange(0.015,0.077);
-                ws->var("sigmaSig2")->setRange(0.01,0.06);
-                ws->var("sigmaSig1")->setVal(0.03);
+                ws->var("coefExp")->setRange(-1,3);
+                ws->var("sigmaSig1")->setRange(0.01,0.09);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.04);
                 ws->var("sigmaSig2")->setVal(0.03);
               } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                ws->var("sigmaSig1")->setRange(0.015,0.08);
-                ws->var("sigmaSig2")->setRange(0.01,0.06);
-                ws->var("sigmaSig1")->setVal(0.03);
+                ws->var("coefExp")->setRange(-1,3);
+                ws->var("sigmaSig1")->setRange(0.01,0.09);
+                ws->var("sigmaSig2")->setRange(0.01,0.13);
+                ws->var("sigmaSig1")->setVal(0.04);
                 ws->var("sigmaSig2")->setVal(0.03);
                 if (centest && !dPhitest) {
                   ws->var("sigmaSig2")->setVal(0.013);
                 }
               } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
-                ws->var("sigmaSig1")->setRange(0.015,0.077);
-                ws->var("sigmaSig2")->setRange(0.01,0.06);
-                ws->var("sigmaSig1")->setVal(0.03);
+                ws->var("coefExp")->setRange(-1,3);
+                ws->var("sigmaSig1")->setRange(0.01,0.087);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.05);
                 ws->var("sigmaSig2")->setVal(0.03);
               }
             } else if (inOpt.doWeight == 0) {
@@ -539,7 +542,12 @@ int main (int argc, char* argv[]) {
                 ws->var("sigmaSig2")->setVal(0.09);
               }
 
-              if (inOpt.pmin==3 && inOpt.pmax==6.5) {
+              if (inOpt.pmin==3 && inOpt.pmax==30) {
+                ws->var("sigmaSig1")->setRange(0.01,0.077);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.03);
+                ws->var("sigmaSig2")->setVal(0.06);
+              } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
                 ws->var("sigmaSig1")->setRange(0.01,0.15);
                 ws->var("sigmaSig2")->setRange(0.01,0.06);
                 ws->var("sigmaSig1")->setVal(0.04);
@@ -547,16 +555,19 @@ int main (int argc, char* argv[]) {
                 if (!centest && !dPhitest) {
                   ws->var("sigmaSig2")->setVal(0.04);
                 }
-              } else if (inOpt.pmin==3 && (inOpt.pmax==5.5 || inOpt.pmax==4.5)) {
+              } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+                ws->var("sigmaSig1")->setRange(0.01,0.09);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.06);
+                ws->var("sigmaSig2")->setVal(0.07);
+              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
                 ws->var("sigmaSig1")->setRange(0.01,0.09);
                 ws->var("sigmaSig2")->setRange(0.01,0.13);
-                if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                  if (!centest && !dPhitest) {
-                    ws->var("sigmaSig1")->setVal(0.09);
-                    ws->var("sigmaSig2")->setVal(0.07);
-                  } else if (centest && !dPhitest) {
-                    ws->var("sigmaSig2")->setVal(0.013);
-                  }
+                if (!centest && !dPhitest) {
+                  ws->var("sigmaSig1")->setVal(0.09);
+                  ws->var("sigmaSig2")->setVal(0.07);
+                } else if (centest && !dPhitest) {
+                  ws->var("sigmaSig2")->setVal(0.013);
                 }
               } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
                 ws->var("sigmaSig1")->setRange(0.05,0.11);
@@ -576,7 +587,13 @@ int main (int argc, char* argv[]) {
               ws->var("sigmaSig2")->setVal(0.010);
             }
           }
-        } // rap1.6-2.4
+
+          if (inOpt.ymin==2.0 && inOpt.ymax==2.4) {
+            ws->var("sigmaSig1")->setRange(0.01,0.11);
+            ws->var("sigmaSig2")->setRange(0.01,0.08);
+            ws->var("sigmaSig2")->setVal(0.05);
+          }
+        } // rap > 1.6
       } // PbPb
       else {
         if (!inOpt.yrange.compare("0.0-2.4")) {
@@ -597,19 +614,22 @@ int main (int argc, char* argv[]) {
           ws->var("sigmaSig2")->setVal(0.05);
           ws->var("sigmaSig1")->setRange(0.005,0.06);
           ws->var("sigmaSig2")->setRange(0.005,0.10);
-        }
-        else if (inOpt.ymin >= 0.8 && inOpt.ymax <= 2.0) {
+        } else if (inOpt.ymin == 1.6 && inOpt.ymax == 2.4 && inOpt.pmin==3 && inOpt.pmax==4.5) {
+          ws->var("sigmaSig1")->setVal(0.03);
+          ws->var("sigmaSig2")->setVal(0.03);
+          ws->var("sigmaSig1")->setRange(0.01,0.09);
+          ws->var("sigmaSig2")->setRange(0.01,0.09);
+        } else if (inOpt.ymin >= 0.8 && inOpt.ymax <= 2.0) {
           ws->var("sigmaSig1")->setVal(0.01);
           ws->var("sigmaSig2")->setVal(0.05);
           ws->var("sigmaSig1")->setRange(0.01,0.06);
           ws->var("sigmaSig2")->setRange(0.02,0.10);
-        }
-        else if (!inOpt.yrange.compare("2.0-2.4")) {
+        } else if (!inOpt.yrange.compare("2.0-2.4")) {
           if (!inOpt.prange.compare("6.5-30.0")) {
             ws->var("sigmaSig1")->setVal(0.02);
-            ws->var("sigmaSig2")->setVal(0.07);
-            ws->var("sigmaSig1")->setRange(0.01,0.11);
-            ws->var("sigmaSig2")->setRange(0.02,0.15);
+            ws->var("sigmaSig2")->setVal(0.03);
+            ws->var("sigmaSig1")->setRange(0.01,0.10);
+            ws->var("sigmaSig2")->setRange(0.01,0.12);
           }
         } // rap2.0-2.4
       } // pp
@@ -1033,12 +1053,12 @@ int main (int argc, char* argv[]) {
             if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kTRUE);
 //            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
 //            if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
-       
+
             //////// check ////////
-            if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==10 && inOpt.cmax==20) {
+/*            if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==10 && inOpt.cmax==20) {
 //              if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kFALSE);
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
-            }
+            }*/
         }  // end of fix fraction & mean values to the MinBias bin
 
 
@@ -1122,15 +1142,16 @@ int main (int argc, char* argv[]) {
           }
         } else if (inOpt.isPbPb==1) { //PbPb
           if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==10 && inOpt.cmax==20) ||
                (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==0 && inOpt.cmax==10 && inOpt.psmin==0.393 && inOpt.psmax==0.785) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==10 && inOpt.cmax==30 &&
-                inOpt.psmin==0.785 && inOpt.psmax==1.178) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==30 && inOpt.cmax==60 &&
-                inOpt.psmin==0.393 && inOpt.psmax==0.785)
+               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==20 && (inOpt.cmax==30 || inOpt.cmax==40)) ||
+               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==30 && inOpt.cmax==60 && inOpt.psmin==0.393 && inOpt.psmax==0.785) ||
+               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.785 && inOpt.psmax==1.178)
              ){
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
+          } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5) {
+            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
+            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
           } else { //Normal PbPb bins
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
@@ -1147,20 +1168,13 @@ int main (int argc, char* argv[]) {
       cout << "DATA :: N events to fit on the sidebands: " << redDataSB->sumEntries() << endl;
 
       if (inOpt.isPbPb ==0) {
-        if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5) {
-          ws->var("fpm")->setVal(0.604708);
-          ws->var("fLiving")->setVal(0.970657);
-          ws->var("fbkgCtTot")->setVal(0.419638);
-          ws->var("lambdap")->setVal(0.296444);
-          ws->var("lambdam")->setVal(0.100396);
-          ws->var("lambdasym")->setVal(0.72977);
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==4.5 && inOpt.pmax==5.5) {
-          ws->var("fpm")->setVal(0.9658);
-          ws->var("fLiving")->setVal(0.3907);
-          ws->var("fbkgCtTot")->setVal(0.139);
-          ws->var("lambdap")->setVal(0.476);
-          ws->var("lambdam")->setVal(0.399);
-          ws->var("lambdasym")->setVal(0.085);
+        if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==8.0) {
+          ws->var("fpm")->setVal(0.9991);
+          ws->var("fLiving")->setVal(0.66025);
+          ws->var("fbkgCtTot")->setVal(0.29972);
+          ws->var("lambdap")->setVal(0.42684);
+          ws->var("lambdam")->setVal(0.008414);
+          ws->var("lambdasym")->setVal(0.0897);
         } else if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==7.5) {
           ws->var("fpm")->setVal(0.986202);
           ws->var("fLiving")->setVal(0.636215);
@@ -1168,20 +1182,13 @@ int main (int argc, char* argv[]) {
           ws->var("lambdap")->setVal(0.413972);
           ws->var("lambdam")->setVal(0.504259);
           ws->var("lambdasym")->setVal(0.0781019);
-        } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==4.5) {
-          ws->var("fpm")->setVal(0.701);
-          ws->var("fLiving")->setVal(0.8597);
-          ws->var("fbkgCtTot")->setVal(0.2233);
-          ws->var("lambdap")->setVal(0.408);
-          ws->var("lambdam")->setVal(0.0257);
-          ws->var("lambdasym")->setVal(0.189);
-        } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==5.5) {
-          ws->var("fpm")->setVal(0.701);
-          ws->var("fLiving")->setVal(0.8597);
-          ws->var("fbkgCtTot")->setVal(0.2233);
-          ws->var("lambdap")->setVal(0.408);
-          ws->var("lambdam")->setVal(0.0257);
-          ws->var("lambdasym")->setVal(0.189);
+        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && (inOpt.pmin==3 || inOpt.pmin==4.5) && (inOpt.pmax==4.5 || inOpt.pmax==5.5 || inOpt.pmax==6.5) ) {
+          ws->var("fpm")->setVal(0.604708);
+          ws->var("fLiving")->setVal(0.970657);
+          ws->var("fbkgCtTot")->setVal(0.419638);
+          ws->var("lambdap")->setVal(0.296444);
+          ws->var("lambdam")->setVal(0.100396);
+          ws->var("lambdasym")->setVal(0.72977);
         } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==5.5 && inOpt.pmax==6.5) {
           ws->var("fpm")->setVal(0.657742);
           ws->var("fLiving")->setVal(0.981838);
@@ -1283,22 +1290,52 @@ int main (int argc, char* argv[]) {
             ws->var("lambdam")->setVal(0.1);
             ws->var("lambdasym")->setVal(0.037);
           }
+        } else if (inOpt.doWeight==1 && inOpt.ymin==1.6 && inOpt.ymax==2.0 && inOpt.pmin==6.5 && inOpt.pmax==30) {
+            ws->var("fpm")->setVal(0.95599);
+            ws->var("fLiving")->setVal(0.3452);
+            ws->var("fbkgCtTot")->setVal(0.49518);
+            ws->var("lambdap")->setVal(0.18834);
+            ws->var("lambdam")->setVal(0.0070976);
+            ws->var("lambdasym")->setVal(0.059821);
         } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
           if (inOpt.doWeight == 0) {
             if (inOpt.cmin == 0 && inOpt.cmax == 100) {
-              ws->var("fpm")->setVal(0.05);
-              ws->var("fLiving")->setVal(0.28);
-              ws->var("fbkgCtTot")->setVal(0.42);
-              ws->var("lambdap")->setVal(0.37);
-              ws->var("lambdam")->setVal(0.026);
-              ws->var("lambdasym")->setVal(0.027);
-            } else if (inOpt.cmin == 20 && inOpt.cmax == 30) {
-              ws->var("fpm")->setVal(0.46);
-              ws->var("fLiving")->setVal(0.22);
-              ws->var("fbkgCtTot")->setVal(0.49);
-              ws->var("lambdap")->setVal(0.15);
-              ws->var("lambdam")->setVal(0.064);
-              ws->var("lambdasym")->setVal(0.05);
+              if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+                ws->var("fpm")->setVal(0.999);
+                ws->var("fLiving")->setVal(0.284);
+                ws->var("fbkgCtTot")->setVal(0.675);
+                ws->var("lambdap")->setVal(0.21477);
+                ws->var("lambdam")->setVal(0.01348);
+                ws->var("lambdasym")->setVal(0.094496);
+              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
+                ws->var("fpm")->setVal(0.999);
+                ws->var("fLiving")->setVal(0.295622);
+                ws->var("fbkgCtTot")->setVal(0.692533);
+                ws->var("lambdap")->setVal(0.252302);
+                ws->var("lambdam")->setVal(0.01430);
+                ws->var("lambdasym")->setVal(0.0882);
+              } else {
+                ws->var("fpm")->setVal(0.999);
+                ws->var("fLiving")->setVal(0.27254);
+                ws->var("fbkgCtTot")->setVal(0.6533);
+                ws->var("lambdap")->setVal(0.21882);
+                ws->var("lambdam")->setVal(0.013298);
+                ws->var("lambdasym")->setVal(0.0798);
+              }
+            } else if (inOpt.cmin == 20 && (inOpt.cmax == 30 || inOpt.cmax == 40)) {
+              ws->var("fpm")->setVal(0.999);
+              ws->var("fLiving")->setVal(0.327);
+              ws->var("fbkgCtTot")->setVal(0.606);
+              ws->var("lambdap")->setVal(0.145);
+              ws->var("lambdam")->setVal(0.0158);
+              ws->var("lambdasym")->setVal(0.083);
+            } else if (inOpt.cmin == 30 && inOpt.cmax == 40) {
+              ws->var("fpm")->setVal(0.99975);
+              ws->var("fLiving")->setVal(0.45546);
+              ws->var("fbkgCtTot")->setVal(0.70);
+              ws->var("lambdap")->setVal(0.14217);
+              ws->var("lambdam")->setVal(0.008405);
+              ws->var("lambdasym")->setVal(0.092943);
             } else if (inOpt.cmin == 40 && inOpt.cmax == 50) {
               ws->var("fpm")->setVal(0.99);
               ws->var("fLiving")->setVal(0.064);
@@ -1322,14 +1359,20 @@ int main (int argc, char* argv[]) {
               ws->var("lambdasym")->setVal(0.12);
             } // end of not-weighted setting
           } else {  // weighting applied
-            if ( (inOpt.cmin == 40 && inOpt.cmax == 50) || (inOpt.cmin == 40 && inOpt.cmax == 100)
-            ) {
-              ws->var("fpm")->setVal(0.15);
-              ws->var("fLiving")->setVal(0.95);
-              ws->var("fbkgCtTot")->setVal(0.0001);
-              ws->var("lambdap")->setVal(0.19);
-              ws->var("lambdam")->setVal(0.0156);
-              ws->var("lambdasym")->setVal(0.24);
+            if (inOpt.cmin == 40 && inOpt.cmax == 50) {
+              ws->var("fpm")->setVal(0.098713);
+              ws->var("fLiving")->setVal(0.92529);
+              ws->var("fbkgCtTot")->setVal(0.16331);
+              ws->var("lambdap")->setVal(0.17607);
+              ws->var("lambdam")->setVal(0.0171);
+              ws->var("lambdasym")->setVal(0.19582);
+            } else if (inOpt.cmin == 40 && inOpt.cmax == 100) {
+              ws->var("fpm")->setVal(0.8064);
+              ws->var("fLiving")->setVal(0.1871);
+              ws->var("fbkgCtTot")->setVal(0.8031);
+              ws->var("lambdap")->setVal(0.4052);
+              ws->var("lambdam")->setVal(0.4406);
+              ws->var("lambdasym")->setVal(0.098);
             } else if (inOpt.cmin == 10 && inOpt.cmax == 20) {
               ws->var("fpm")->setVal(0.8064);
               ws->var("fLiving")->setVal(0.1871);
@@ -1456,8 +1499,8 @@ int main (int argc, char* argv[]) {
             if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
             if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
+              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
+              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
               ws->var("Bfrac")->setVal(0.05);
             } else {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
@@ -1471,10 +1514,9 @@ int main (int argc, char* argv[]) {
             if ((inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) ||
                 (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==30)
                ) {
-//              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);//modified_141113
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);//modified_150123
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);//modified_141113
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);//modified_141113
+              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);//modified_141113
+              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);//modified_141113
               ws->var("Bfrac")->setVal(0.05);
             } else {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);

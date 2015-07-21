@@ -63,9 +63,17 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1215_Histos_cmssw445p5_RegIt_hStats.root",
       "/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1530_Histos_cmssw445p5_RegIt_hStats.root"
     };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt03_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt36_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt69_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt912_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1215_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1530_Histos_v1.root",
+    };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    Eff3DMC *NPMC3D = new Eff3DMC(nfiles,filelist,"NPJpsi",absRapidity,true,isPbPb);
+    Eff3DMC *NPMC3D = new Eff3DMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb);
     NPMC3D->CreateHistos(nbinsy, yarray, nbinsy2, yarray2, nbinspt, ptarray, nbinspt2, ptarray2, nbinscent, centarray, nbinscent2, centarray2, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray);
     NPMC3D->SetTree();
     NPMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
@@ -82,8 +90,16 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/jpsiMuMu_JpsiPt1215_Histos_cmssw445p5_RegIt_hStats.root",
       "/home/mihee/cms/oniaTree/2011PbPb/jpsiMuMu_JpsiPt1530_Histos_cmssw445p5_RegIt_hStats.root"
     };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt03_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt36_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt69_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt912_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1215_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1530_Histos_v1.root",
+    };
     int nfiles = sizeof(filelist)/sizeof(string);
-    Eff3DMC *PRMC3D = new Eff3DMC(nfiles,filelist,"PRJpsi",absRapidity,false,isPbPb);
+    Eff3DMC *PRMC3D = new Eff3DMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
     PRMC3D->CreateHistos(nbinsy, yarray, nbinsy2, yarray2, nbinspt, ptarray, nbinspt2, ptarray2, nbinscent, centarray, nbinscent2, centarray2, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray);
     PRMC3D->SetTree();
     PRMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);

@@ -48,9 +48,17 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1215_Histos_cmssw445p5_RegIt_hStats.root",
       "/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1530_Histos_cmssw445p5_RegIt_hStats.root"
     };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt03_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt36_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt69_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt912_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1215_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1530_Histos_v1.root",
+    };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *NPMC = new EffMC(nfiles,filelist,"NPJpsi",absRapidity,true,isPbPb);
+    EffMC *NPMC = new EffMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb);
     NPMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     NPMC->SetTree();
     NPMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
@@ -66,9 +74,17 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/jpsiMuMu_JpsiPt1215_Histos_cmssw445p5_RegIt_hStats.root",
       "/home/mihee/cms/oniaTree/2011PbPb/jpsiMuMu_JpsiPt1530_Histos_cmssw445p5_RegIt_hStats.root"
     };
+    string filelist2[] = {
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt03_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt36_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt69_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt912_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1215_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1530_Histos_v1.root",
+    };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *PRMC = new EffMC(nfiles,filelist,"PRJpsi",absRapidity,false,isPbPb);
+    EffMC *PRMC = new EffMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
     PRMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     PRMC->SetTree();
     PRMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
