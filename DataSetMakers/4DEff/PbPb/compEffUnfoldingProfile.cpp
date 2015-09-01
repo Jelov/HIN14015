@@ -28,6 +28,18 @@ bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
 return false;
 }
 
+double fitPol1(double *x, double *par) {
+  return par[0]*(x[0]-par[1]) + par[2];
+}
+
+double fitPol2(double *x, double *par) {
+  return par[0]*(x[0]/par[1]-par[2]) + par[3];
+}
+
+double fitExp(double *x, double *par) {
+  return par[0]*(TMath::Exp((x[0]-par[1])/par[2])) + par[3];
+}
+
 double fitERF(double *x, double *par) {
   return par[0]*TMath::Erf((x[0]-par[1])/par[2]);
 }
@@ -59,7 +71,7 @@ void SetHistStyle(TGraph *h, int i, int j, double rmin, double rmax){
   if (nmarker>j) {
     h->SetMarkerStyle(markerArr[j]);
   } else {
-    h->SetMarkerStyle(20+j);
+    h->SetMarkerStyle(kOpenCircle);
   }
 
   h->GetXaxis()->SetTitleSize(0.048);
@@ -454,13 +466,21 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
       leg->Draw();
 
       lat->SetTextSize(0.030);
-      if (isPbPb) lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
-      else lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
+
       for (int c=0; c<nbinscent; c++) {
         int centmin=centarray[c]; int centmax=centarray[c+1];
 
         int i = a*nbinspt*nbinscent + b*nbinscent + c;
         TF1 *fitf = (TF1*)gNPEff[i]->GetFunction(Form("%s_TF",hNPEff[i]->GetName()));
+
+        if (c==0) { // Draw equation for the 1st time
+          if (isPbPb) {
+            if ( (ymin==1.2 && ymax==1.6 && ptmin==16 && ptmax==30 && centmin==0 && centmax==40) ||
+                  isForwardLowpT(ymin, ymax, ptmin, ptmax) ){
+               lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
+            } else lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
+          } else lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
+        }
 
         lat->SetTextColor(colorArr[c]);
 
@@ -633,10 +653,10 @@ int main(int argc, char *argv[]) {
   const double _ptarr_pbpb[]       = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _ptarr_pp[]         = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-  const double _ptforwarr_pp[]     = {3.0, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30}; //pp
-  const double _raparr_abs[]       = {0.0, 0.8, 1.6};
+  const double _ptforwarr_pp[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _raparr_abs[]       = {0.0, 1.2, 1.6};
   const double _rapforwarr_abs[]   = {1.6, 2.4};
-  const double _raparr_noabs[]     = {-1.6, -0.8, 0.0, 0.8, 1.6};
+  const double _raparr_noabs[]     = {-1.6, -1.2, 0.0, 1.2, 1.6};
   const double _rapforwarr_noabs[] = {-2.4, -1.6, 1.6, 2.4};
   const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0}; 
 //  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0};
@@ -689,25 +709,25 @@ int main(int argc, char *argv[]) {
   // Read input root files
   string dirPath;
   char effHistname[1000], lxyTRHistname[1000];
-  TFile *lxyTrueRecoFile, *lxyTrueRecoFile_LowPt;
+  TFile *lxyTrueRecoFile;
   TFile *effFileNominal, *effFileNominal_LowPt;
   TFile *effFileNominalMinus, *effFileNominalMinus_LowPt;
   TFile *output;
 
   if (isPbPb) {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyzBin2";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pbpb.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pbpb_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/lxyzTrueReco_RLxyz1_TLxyz0.01.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150827/lxyzTrueReco.root",dirPath.c_str());
   } else {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pp.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pp_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/lxyzTrueReco_RLxyz1_TLxyz0.01.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150827/lxyzTrueReco.root",dirPath.c_str());
   }
   if (absRapidity) {
     sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
@@ -737,13 +757,10 @@ int main(int argc, char *argv[]) {
   
   cout << lxyTRHistname << endl;
   lxyTrueRecoFile = new TFile(lxyTRHistname,"read");
-  
-  cout << lxyTRHistname << endl;
-  lxyTrueRecoFile_LowPt = new TFile(lxyTRHistname,"read");
        
   
   if ( !effFileNominal->IsOpen() || !effFileNominal_LowPt->IsOpen() ||
-       !lxyTrueRecoFile->IsOpen() || !lxyTrueRecoFile_LowPt->IsOpen() ||
+       !lxyTrueRecoFile->IsOpen() ||
        (!absRapidity && (!effFileNominalMinus->IsOpen() || !effFileNominalMinus_LowPt->IsOpen())) ) {
     cout << "CANNOT read efficiency root files. Exit." << endl;
     return -1;
@@ -771,16 +788,23 @@ int main(int argc, char *argv[]) {
       for (unsigned int c=0; c<nCentArr; c++) {
         unsigned int nidx = a*nPtArr*nCentArr + b*nCentArr + c;
 
-        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
-                         raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        // lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get("lxyzTrueReco_pfy");
+        double ymin, ymax;
+        if (TMath::Abs(raparr[a])<TMath::Abs(raparr[a+1])) {
+          ymin = TMath::Abs(raparr[a]);
+          ymax = TMath::Abs(raparr[a+1]);
+        } else {
+          ymin = TMath::Abs(raparr[a+1]);
+          ymax = TMath::Abs(raparr[a]);
+        }
+        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_pfy",
+                         ymin,ymax,ptarr[b],ptarr[b+1]);
+        lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get(fitname.c_str());
  
-        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
-                         raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
-        //lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyzTrueReco");
-       
+        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f",
+                         ymin,ymax,ptarr[b],ptarr[b+1]);
+        lxyTrueReco[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
+        cout << nidx << " " << lxyTrueReco[nidx]->GetName() << endl; 
+
         if (isForwardLowpT(raparr[a], raparr[a+1], ptarr[b], ptarr[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
           ctauarr = _ctauforwarray;
@@ -797,6 +821,7 @@ int main(int argc, char *argv[]) {
           } else {
             hMeanLxy[nidx][d] = (TH1D*)effFileNominal->Get(fitname.c_str());
           }
+          cout << fitname << " " <<  hMeanLxy[nidx][d] << endl;
         }
 
         fitname = Form("hEffLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
@@ -810,7 +835,11 @@ int main(int argc, char *argv[]) {
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         heffSimUnf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        if (raparr[a]==1.2 && raparr[a+1]==1.6 && ptarr[b]==16 && ptarr[b+1]==30 && centarr[c]==0 && centarr[c+1]==40) {
+          feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],4);
+        } else {
+          feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        }
 
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
@@ -835,15 +864,23 @@ int main(int argc, char *argv[]) {
         if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
         unsigned int nidx = a*nPtForwArr*nCentForwArr + b*nCentForwArr + c; 
              
-        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_pfy",
-                         rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-//        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile_LowPt->Get(fitname.c_str());
-        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile_LowPt->Get("lxyzTrueReco_pfy");
+        double ymin, ymax;
+        if (TMath::Abs(rapforwarr[a])<TMath::Abs(rapforwarr[a+1])) {
+          ymin = TMath::Abs(rapforwarr[a]);
+          ymax = TMath::Abs(rapforwarr[a+1]);
+        } else {
+          ymin = TMath::Abs(rapforwarr[a+1]);
+          ymax = TMath::Abs(rapforwarr[a]);
+        }
+
+        string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_pfy",
+                         ymin,ymax,ptforwarr[b],ptforwarr[b+1]);
+        lxyTrueReco_pfy_LowPt[nidx] = (TProfile*)lxyTrueRecoFile->Get(fitname.c_str());
         
-        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
-                         rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-//        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
-        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get("lxyzTrueReco");
+        fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f",
+                  ymin,ymax,ptforwarr[b],ptforwarr[b+1]);
+        lxyTrueReco_LowPt[nidx] = (TH2D*)lxyTrueRecoFile->Get(fitname.c_str());
+        cout << nidx << " " << lxyTrueReco_LowPt[nidx]->GetName() << endl;
         
         if (isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
@@ -861,6 +898,7 @@ int main(int argc, char *argv[]) {
           } else {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
           }
+          cout << fitname << " " <<  hMeanLxy_LowPt[nidx][d] << endl;
         }
 
         fitname = Form("hEffLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
@@ -874,12 +912,12 @@ int main(int argc, char *argv[]) {
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
         heffSimUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
         
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
         heffProf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
@@ -1025,6 +1063,8 @@ int main(int argc, char *argv[]) {
           if (ymin==0.8 && ymax==1.6 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==8) {
             feffSimUnf[nidx]->SetParameters(0.23,1.35,0.55,0.33);
             feffSimUnf[nidx]->FixParameter(2,0.55);
+          } else if (ymin==-1.6 && ymax==-1.2 && ptmin==11 && ptmax==13 && centmin==0 && centmax==40) {
+            feffSimUnf[nidx]->SetParameters(0.07,2.21,0.11,0.49);
           }
         } else { //pp
           if (( (ymin==-0.8 && ymax==0.0)||(ymin== 0.0 && ymax==0.8) ) && ptmin==11.0 && ptmax==13.0) {

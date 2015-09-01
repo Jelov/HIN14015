@@ -787,6 +787,49 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
   delete can;
 
 
+
+  //////// 1DEffLxy for really used histos
+  for (int i=0; i<nbinsy-1; i++) {
+    for (int j=0; j<nbinspt-1; j++) {
+      for (int k=0; k<nbinscent-1; k++) {
+        double ymin=yarray[i]; double ymax=yarray[i+1];
+        double ptmin=ptarray[j]; double ptmax=ptarray[j+1];
+        int centmin=centarray[k]; int centmax=centarray[k+1];
+
+        cout << "1DEffLxy diff in all 3D: " << i << " " << j << " " << k << " ";
+
+        TCanvas *canv = new TCanvas("c","c",600,600);
+        canv->Draw();
+        canv->SetLogy(0);
+
+        string className = "NPJpsi";
+        TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        cout << Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax) << endl;
+        className = "PRJpsi";
+        TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        SetHistStyle(hNPEff,0,0,0,1.3);
+        SetHistStyle(hPREff,3,1,0,1.3);
+
+        hNPEff->Draw();
+        hPREff->Draw("same");
+        std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
+        if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+        else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+        lat->DrawLatex(0.15,0.85,testStr.second.c_str());
+        lat->DrawLatex(0.15,0.80,testStr.first.c_str());
+        if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+        legA->Draw();
+
+        canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+        canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+        delete canv;
+
+      } //end of cent loop plot
+    } //end of pt loop plot
+  } // end of rap loop plotting
+
+
+  //// 1D integrated plots
   for (int i=0; i<nbinsy-1; i++) {
     double ymin=yarray[i]; double ymax=yarray[i+1];
     double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
@@ -1072,7 +1115,8 @@ int main(int argc, char *argv[]) {
   LxyEff_diffPt(absRapidity, logy, isPbPb);
   LxyEff_diffCent(absRapidity, logy, isPbPb);
 
-  LxyEff_1D(absRapidity, logy, isPbPb, "lxyBins", "NPMC3D_eff.root", "PRMC3D_eff.root");
+//  LxyEff_1D(absRapidity, logy, isPbPb, "lxyBins", "NPMC3D_eff.root", "PRMC3D_eff.root");
+
   LxyEff_1D(absRapidity, logy, isPbPb, "anaBins", "NPMC3DAnaBins_eff.root", "PRMC3DAnaBins_eff.root");
 
   return 0;

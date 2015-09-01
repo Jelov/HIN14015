@@ -58,7 +58,10 @@ static int runType = 0;
 static bool doWeighting = false;
 
 //0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
-static bool use3DCtau = false;
+static bool use3DCtau = true;
+
+//0 : not apply tnp correction factor, 1: apply tnp correction factor
+static bool useTnPCorr = true;
 
 //0: don't care about RPAng, 1: Pick events with RPAng != -10
 static bool checkRPNUM = false;
@@ -89,8 +92,8 @@ const int centarr[] = {0, 4, 8, 16, 40};
 const int centforwarr[] = {0, 4, 8, 16, 40};
 //const int centarr[] = {0, 40};
 //const int centforwarr[] = {0, 40};
-const double ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30.0};
-const double ptforwarr[] = {3.0, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30.0};
+const double ptarr[] = {6.5, 7.5, 9.0, 11, 13, 16, 30.0};
+const double ptforwarr[] = {3.0, 4.5, 6.0, 7.5, 9.0, 11, 13, 16, 30.0};
 const double raparr[] = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
 const double rapforwarr[] = {-2.4, -2.0, -1.6, 1.6, 2.0, 2.4};
 const unsigned int nCentArr = sizeof(centarr)/sizeof(int) -1;
@@ -107,7 +110,7 @@ const int _centarr[] = {0, 40};
 const int _centforwarr[] = {0, 40};
 const double _ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
 const double _ptforwarr[] = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-const double _raparr[] = {-1.6, -0.8, 0.0, 0.8, 1.6};
+const double _raparr[] = {-1.6, -1.2, 0.0, 1.2, 1.6};
 const double _rapforwarr[] = {-2.4, -1.6, 1.6, 2.4};
 const unsigned int _nCentArr = sizeof(_centarr)/sizeof(int) -1;
 const unsigned int _nCentForwArr = sizeof(_centforwarr)/sizeof(int) -1;
@@ -317,8 +320,11 @@ int main(int argc, char* argv[]) {
     }
   }
     
-    
-          
+  // To be used with useTnPCorr option
+  TF1 *gSingleMuW = new TF1(Form("TnP_ScaleFactor"),
+  "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
+  TF1 *gSingleMuW_LowPt = new TF1(Form("TnP_ScaleFactor_LowPt"),
+  "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
 
   if (doWeighting) {
     // 4D efficiency files
@@ -327,8 +333,8 @@ int main(int argc, char* argv[]) {
     
     string dirPath;
     if (use3DCtau) {
-      dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyzBin2/";
-      if (!isPbPb) dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEtaLxyz/";
+      dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEta_noTnPCorr/";
+      if (!isPbPb) dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEta_noTnPCorr/";
     } else {
       dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEtaLxyBin2/";
       if (!isPbPb) dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEtaLxy/";
@@ -350,10 +356,10 @@ int main(int argc, char* argv[]) {
 
     if (trigType == 3 || trigType == 4) {
       if (isPbPb) {
-        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEtaLxyzBin2/FinalEfficiency_pbpb_notAbs.root");
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEta_noTnPCorr/FinalEfficiency_pbpb_notAbs.root");
         else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEtaLxyBin2/FinalEfficiency_pbpb_notAbs.root");
       } else {
-        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEtaLxyz/FinalEfficiency_pp_notAbs.root");
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEta_noTnPCorr/FinalEfficiency_pp_notAbs.root");
         else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEtaLxy/FinalEfficiency_pp_notAbs.root");
       }
       cout << effHistname << endl;
@@ -1067,7 +1073,7 @@ int main(int argc, char* argv[]) {
           // 4D efficiency
           if (tmpPt >= 3 && tmpPt < 30 && fabs(Jpsi.theRapidity)>=1.6 && fabs(Jpsi.theRapidity)<2.4) {
             // Pick up a pT eff curve
-/*            for (unsigned int a=0; a<nRapForwArr; a++) {
+            for (unsigned int a=0; a<nRapForwArr; a++) {
               for (unsigned int c=0; c<nCentForwArr; c++) {
                 unsigned int nidx = a*nCentForwArr + c;
                 if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
@@ -1081,7 +1087,7 @@ int main(int argc, char* argv[]) {
                 }
               }
             }
-*/
+
             if (isPbPb || !isPbPb) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapForwArr; a++) {
@@ -1098,10 +1104,8 @@ int main(int argc, char* argv[]) {
                         double lxy;
                         if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
                         else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
-                        //if (lxy < 0) lxy = 0;
-                        if (lxy >= 3) lxy = 3;
-                        if (lxy < 0) theEffLxy = feffLxy_LowPt[nidx]->Eval(-1*lxy);
-                        else theEffLxy = feffLxy_LowPt[nidx]->Eval(lxy);
+                        if (TMath::Abs(lxy) >= 3) lxy = 3;
+                        theEffLxy = feffLxy_LowPt[nidx]->Eval(TMath::Abs(lxy));
                         theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
                         if (theEffLxy <= 0) {
                           int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
@@ -1119,28 +1123,19 @@ int main(int argc, char* argv[]) {
             if (use3DCtau) cout << "\t" << "lxyz: " << Jpsi.theCt*Jpsi.theP/PDGJpsiM << " theEffPt: " << theEffPt;
             else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
             cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
-//            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-//            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+
+            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
             if (theEffLxy <= 0) {           // This event is not going to be included!
               theEff = -1;
               cout << "  " << theEffLxy << endl;
-            } else {
-              theEff = theEffLxy;
             }
 
-//            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
-//              cout << "\t" << "low pT, Cannot be found in given rap, cent arrays!" << endl;
-//              theEff=1;
-//            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
-//              cout << "\t" << "low pT, negative efficiency in given rap, cent arrays!" << endl;
-//              theEff=0;
-//            }
-            
             cout << "\t" << "final eff: " << theEff << endl;
 
           } else if (tmpPt >= 6.5 && fabs(Jpsi.theRapidity)<1.6) {
             // Pick up a pT eff curve
-/*            for (unsigned int a=0; a<nRapArr; a++) {
+            for (unsigned int a=0; a<nRapArr; a++) {
               for (unsigned int c=0; c<nCentArr; c++) {
                 unsigned int nidx = a*nCentArr + c;
                 if ( (Jpsi.theRapidity >= raparr[a] && Jpsi.theRapidity < raparr[a+1]) &&
@@ -1152,7 +1147,7 @@ int main(int argc, char* argv[]) {
                 }
               }
             }
-*/
+
             if (isPbPb || !isPbPb) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapArr; a++) {
@@ -1168,10 +1163,8 @@ int main(int argc, char* argv[]) {
                         double lxy;
                         if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
                         else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
-                        //if (lxy < 0) lxy = 0;
-                        if (lxy >= 3) lxy = 3;
-                        if (lxy < 0) theEffLxy = feffLxy[nidx]->Eval(-1*lxy);
-                        else theEffLxy = feffLxy[nidx]->Eval(lxy);
+                        if (TMath::Abs(lxy) >= 3) lxy = 3;
+                        theEffLxy = feffLxy[nidx]->Eval(TMath::Abs(lxy));
                         theEffLxyAt0 = feffLxy[nidx]->Eval(0);
                         if (theEffLxy <= 0) {
                           int binnumber = heffLxy[nidx]->FindBin(lxy);
@@ -1189,27 +1182,31 @@ int main(int argc, char* argv[]) {
             if (use3DCtau) cout << "\t" << "lxyz: " << Jpsi.theCt*Jpsi.theP/PDGJpsiM << " theEffPt: " << theEffPt;
             else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
             cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
-//            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-//            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+
+            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
             if (theEffLxy <= 0) {           // This event is not going to be included!
               theEff = -1;
               cout << "  " << theEffLxy << endl;
-            } else {
-              theEff = theEffLxy;
             }
-
-//            if ( theEffPt==0 || theEffLxy==0 || theEff == 0) {
-//              cout << "\t" << "low pT, Cannot be found in given rap, cent arrays!" << endl;
-//              theEff=1;
-//            } else if ( theEffPt<0 || theEffLxy<0 || theEff<0 ) {
-//              cout << "\t" << "low pT, negative efficiency in given rap, cent arrays!" << endl;
-//              theEff=0;
-//            }
 
             cout << "\t" << "final eff: " << theEff << endl;
 
           } else {
             theEff = 1.0;
+          }
+
+          // Apply single muon tnp scale factors
+          if (useTnPCorr) {
+            double singleMuWeight = 1;
+            if (TMath::Abs(m1P->Eta()) < 1.6) singleMuWeight = gSingleMuW->Eval(m1P->Pt());
+            else singleMuWeight = gSingleMuW_LowPt->Eval(m1P->Pt());
+
+            if (TMath::Abs(m2P->Eta()) < 1.6) singleMuWeight *= gSingleMuW->Eval(m2P->Pt());
+            else singleMuWeight *= gSingleMuW_LowPt->Eval(m2P->Pt());
+            
+            theEff *= singleMuWeight;
+            cout << "\t" << "TnPCorr theEff: " << theEff << endl;
           }
 
           if (trigType == 3) {  //bit 1 case
@@ -1545,6 +1542,9 @@ int main(int argc, char* argv[]) {
 
   cout << "PassingEvent: " << PassingEvent->GetEntries() << endl;
   delete PassingEvent;
+
+  delete gSingleMuW;
+  delete gSingleMuW_LowPt;
 
   return 0;
 

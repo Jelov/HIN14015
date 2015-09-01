@@ -141,6 +141,8 @@ class Eff3DMC {
     // Cent histo (integrated over all other variables)
     TH1D *h1DGenCent, *h1DRecCent, *h1DEffCent;
 
+    // Basic checks
+    TH1D *h1DGenDiMuMass, *h1DRecDiMuMass, *h1DGenCentrality, *h1DRecCentrality;
 
   public:
     Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb);
@@ -214,6 +216,9 @@ Eff3DMC::~Eff3DMC() {
   delete h1DGenCent;
   delete h1DRecCent;
   delete h1DEffCent;
+  delete h1DRecDiMuMass;
+  delete h1DGenDiMuMass;
+
 
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
@@ -369,6 +374,12 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
     nbinsctau = nbinsmidctau;
   }
 
+  h1DGenDiMuMass = new TH1D(
+      Form("h1DGenDiMuMass_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
+      ";Mass [GeV/c^{2}]",90,2.6,3.5);
+  h1DRecDiMuMass = new TH1D(
+      Form("h1DRecDiMuMass_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
+      ";Mass [GeV/c^{2}]",90,2.6,3.5);
   h1DGenRap = new TH1D(
       Form("h1DGenRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
       ";Rapidity",nbinsy-1,yarray);
@@ -484,7 +495,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
 
     // Forward rapidity region
     gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-    "(0.7788*TMath::Erf((x-1.1903)/1.9880))/(0.7364*TMath::Erf((x-1.2538)/2.2530))");
+    "(0.7897*TMath::Erf((x-0.7162)/2.6261))/(0.7364*TMath::Erf((x-1.2149)/2.3352))");
     
   }
   ////// End of single muon efficiency weighting (RD/MC)
@@ -550,7 +561,6 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
       double dlxyreco = dctaureco*dpt/3.096916;
       
       if ( isMuonInAccept(recoMu1) && isMuonInAccept(recoMu2) &&
-           recoDiMu->M() >= 2.95 && recoDiMu->M()< 3.25 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] &&
            Reco_QQ_sign[iRec] == 0 && Reco_QQ_VtxProb[iRec] > 0.01
          ) {
@@ -614,7 +624,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
 //          cout << "for-rap " << ig << " " << drap << " " << recoMu1->Pt() << " " << recoMu2->Pt() << " " << centrality << " " << singleMuWeight << endl;
         }
 */
-        if (TMath::Abs(recoMu1->Eta()) < 1.6) {
+/*        if (TMath::Abs(recoMu1->Eta()) < 1.6) {
           singleMuWeight = gSingleMuW[ig]->Eval(recoMu1->Pt());
         } else {
           singleMuWeight = gSingleMuW_LowPt[ig]->Eval(recoMu1->Pt());
@@ -625,7 +635,18 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         } else {
           singleMuWeight *= gSingleMuW_LowPt[ig]->Eval(recoMu2->Pt());
         }
+*/
 
+        if (recoDiMu->M() >= 2.6 && recoDiMu->M()< 3.5) {
+          if (isPbPb) {
+            h1DRecDiMuMass->Fill(dm,weight*singleMuWeight*NcollWeight);
+            h1DRecCentrality->Fill(centrality,weight*singleMuWeight*NcollWeight);
+          } else {
+            h1DRecDiMuMass->Fill(dm,singleMuWeight);
+          }
+        }
+
+        if (!(recoDiMu->M() >= 2.95 && recoDiMu->M()< 3.25)) continue;
 
         // Apply weights
         if (absRapidity) {
@@ -750,9 +771,11 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         if (isPbPb) {
           h1DGenPt->Fill(dpt,weight*NcollWeight);
           h1DGenCent->Fill(centrality*2.5,weight*NcollWeight);
+          h1DGenDiMuMass->Fill(genDiMu.M(),weight*NcollWeight);
         } else {
           h1DGenPt->Fill(dpt);
           h1DGenCent->Fill(centrality*2.5);
+          h1DGenDiMuMass->Fill(genDiMu.M());
         }
 
         for (int a=0; a<nbinsy2-1; a++) {
@@ -879,11 +902,11 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
           }
         }
       } else { // pp 
-        if (ymin==1.6 && ymax==2.0) {
-//          f1DEffPtFit[nidx]->SetParLimits(1,-10,3);
+        if (ymin==-0.8 && ymax==0.0) {
+          f1DEffPtFit[nidx]->SetParameters(0.73,5.61,4.22);
         }
         if (ymin==-2.4 && ymax==-2.0) {
-          f1DEffPtFit[nidx]->SetParameters(0.33,0.39,7.0);
+          f1DEffPtFit[nidx]->SetParameters(0.38,-0.42,6.4);
         } else if (ymin==2 && ymax==2.4) {
           f1DEffPtFit[nidx]->SetParameters(0.33,0.90,5.5);
         }
@@ -919,6 +942,9 @@ void Eff3DMC::SaveHistos(string str) {
   h1DGenCent->Write();
   h1DRecCent->Write();
   h1DEffCent->Write();
+  h1DRecDiMuMass->Write();
+  h1DGenDiMuMass->Write();
+
 
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
@@ -1518,7 +1544,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
 
     // Forward rapidity region
     gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-    "(0.7788*TMath::Erf((x-1.1903)/1.9880))/(0.7364*TMath::Erf((x-1.2538)/2.2530))");
+    "(0.7897*TMath::Erf((x-0.7162)/2.6261))/(0.7364*TMath::Erf((x-1.2149)/2.3352))");
 
   }
   ////// End of single muon efficiency weighting (RD/MC)
@@ -1646,7 +1672,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
 //          cout << "for-rap " << ig << " " << drap << " " << recoMu1->Pt() << " " << recoMu2->Pt() << " " << centrality << " " << singleMuWeight << endl;
         }
 */
-        if (TMath::Abs(recoMu1->Eta()) < 1.6) {
+/*        if (TMath::Abs(recoMu1->Eta()) < 1.6) {
           singleMuWeight = gSingleMuW[ig]->Eval(recoMu1->Pt());
         } else {
           singleMuWeight = gSingleMuW_LowPt[ig]->Eval(recoMu1->Pt());
@@ -1657,7 +1683,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
         } else {
           singleMuWeight *= gSingleMuW_LowPt[ig]->Eval(recoMu2->Pt());
         }
-
+*/
         // Differential histograms & Apply weights
         for (int a=0; a<nbinsy-1; a++) {
           for (int b=0; b<nbinspt-1; b++) {
@@ -1986,7 +2012,11 @@ void EffMC::SaveHistos(string str, const double *yarray, const double *ptarray, 
       for (int c=0; c<nbinscent-1; c++) {
         int nidx = a*(nbinspt-1)*(nbinscent-1) + b*(nbinscent-1) + c;
         
+        hGenDiff[nidx]->Write();
+        hRecDiff[nidx]->Write();
         hEffDiff[nidx]->Write();
+        hGenLxyDiff[nidx]->Write();
+        hRecLxyDiff[nidx]->Write();
         hEffLxyDiff[nidx]->Write();
 
         if (isForwardLowpT(yarray[a], yarray[a+1], ptarray[b], ptarray[b+1])) { // Less ctau bins for forward & low pT case
