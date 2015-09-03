@@ -26,8 +26,7 @@ using namespace std;
 static const bool use3DCtau = true;
 
 bool isForward(double ymin, double ymax) {
-  if (fabs(ymin)==2.0 && fabs(ymax)==2.4) return true;
-  else if (fabs(ymin)==2.4 && fabs(ymax)==2.0) return true;
+  if (fabs(ymin)>=2.0 && fabs(ymax)<=2.4) return true;
   else return false;
 }
 
