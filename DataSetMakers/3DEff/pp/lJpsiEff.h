@@ -25,6 +25,12 @@ using namespace std;
 //0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
 static const bool use3DCtau = true;
 
+bool isForward(double ymin, double ymax) {
+  if (fabs(ymin)==2.0 && fabs(ymax)==2.4) return true;
+  else if (fabs(ymin)==2.4 && fabs(ymax)==2.0) return true;
+  else return false;
+}
+
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
 //  if (ptmax<=6.5) return true;
   if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
@@ -130,6 +136,9 @@ class Eff3DMC {
     
     int nbinsy, nbinsy2, nbinspt, nbinspt2, nbinsctau, nbinsmidctau, nbinsforwctau, nbinscent, nbinscent2, nbinsresol;
     double resolmin, resolmax;
+    // coarser pT array for very forward region (pT eff curve)
+    int nbinspt3;
+    double ptarray3[100];
 
     // Rap histo (integrated over all other variables)
     TH1D *h1DGenRap, *h1DRecRap, *h1DEffRap;
@@ -152,7 +161,7 @@ class Eff3DMC {
     void CreateHistos(const int _nbinsy, const double *yarray, const int _nbinsy2, const double *yarray2, const int _nbinspt, const double *ptarray, const int _nbinspt2, const double *ptarray2, const int _nbinscent, const int *centarray, const int _nbinscent2, const int *centarray2, const int _nbinsctau, const double *_ctauarray, const int _nbinsforwctau, const double *_ctauforwarray);
     void LoopTree(const double *yarray, const double *yarray2, const double *ptarray, const double *ptarray2, const int *centarray, const int *centarray2);
     void GetEfficiency(const double *raparray2, const double *ptarray2, const int *centarray2);
-    void SaveHistos(string str);
+    void SaveHistos(string str, const int _nbinsy2, const double *yarray2);
 };
 
 Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb) {
@@ -228,8 +237,15 @@ Eff3DMC::~Eff3DMC() {
       delete h1DEffPtFit[nidx];
       delete f1DEffPtFit[nidx];
       delete g1DEffPtFit[nidx];
-      for (int b=0; b<nbinspt2-1; b++) {
-        delete h1DMeanPtFit[nidx][b];
+      // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+      if (a == nbinsy2-2) {
+        for (int b=0; b<nbinspt3-1; b++) {
+          delete h1DMeanPtFit[nidx][b];
+        }
+      } else {
+        for (int b=0; b<nbinspt2-1; b++) {
+          delete h1DMeanPtFit[nidx][b];
+        }
       }
     }
   }
@@ -374,6 +390,12 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
     nbinsctau = nbinsmidctau;
   }
 
+  nbinspt3 = nbinspt2/2 + 1;
+  for (int b=0; b<nbinspt3; b++) {
+    ptarray3[b] = ptarray2[2*b];
+  }
+  ptarray3[nbinspt3] = ptarray2[nbinspt2];
+
   h1DGenDiMuMass = new TH1D(
       Form("h1DGenDiMuMass_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
       ";Mass [GeV/c^{2}]",90,2.6,3.5);
@@ -419,8 +441,23 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
       
       cout << "CreateHistos: nidx " <<  nidx << " " << a << " " << c << " " ;
 
-      for (int b=0; b<nbinspt2-1; b++) {
-        double ptmin=ptarray2[b]; double ptmax=ptarray2[b+1];
+      // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+      int nbinspt2or3 = nbinspt2;
+      double ptarray2or3[100] = {0};
+      if (isForward(ymin,ymax)) {
+        nbinspt2or3 = nbinspt3;
+        for (int b=0; b<nbinspt3; b++) {
+          ptarray2or3[b] = ptarray3[b];
+        }
+      } else {
+        nbinspt2or3 = nbinspt2;
+        for (int b=0; b<nbinspt2; b++) {
+          ptarray2or3[b] = ptarray2[b];
+        }
+      }
+
+      for (int b=0; b<nbinspt2or3-1; b++) {
+        double ptmin=ptarray2or3[b]; double ptmax=ptarray2or3[b+1];
         cout << b << " " ;
 
         h1DMeanPtFit[nidx][b] = new TH1D(
@@ -431,13 +468,13 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
 
       h1DGenPtFit[nidx] = new TH1D(
           Form("h1DGenPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,_ptmin,_ptmax,centmin,centmax),
-          ";p_{T} (GeV/c)",nbinspt2-1,ptarray2);
+          ";p_{T} (GeV/c)",nbinspt2or3-1,ptarray2or3);
       h1DRecPtFit[nidx] = new TH1D(
           Form("h1DRecPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,_ptmin,_ptmax,centmin,centmax),
-          ";p_{T} (GeV/c)",nbinspt2-1,ptarray2);
+          ";p_{T} (GeV/c)",nbinspt2or3-1,ptarray2or3);
       h1DEffPtFit[nidx] = new TH1D(
           Form("h1DEffPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,_ptmin,_ptmax,centmin,centmax),
-          ";p_{T} (GeV/c)",nbinspt2-1,ptarray2);
+          ";p_{T} (GeV/c)",nbinspt2or3-1,ptarray2or3);
       f1DEffPtFit[nidx] = new TF1(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),fitERF,_ptmin,_ptmax,3);
 
     }
@@ -687,8 +724,23 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
                 h1DRecPtFit[nidx]->Fill(dpt,singleMuWeight);
               }
 
-              for (int b=0; b<nbinspt2-1; b++) {
-                if (ptarray2[b] <= dpt && ptarray2[b+1] > dpt) {
+              // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+              int nbinspt2or3 = nbinspt2;
+              double ptarray2or3[100] = {0};
+              if (isForward(yarray2[a],yarray2[a+1])) {
+                nbinspt2or3 = nbinspt3;
+                for (int b=0; b<nbinspt3; b++) {
+                  ptarray2or3[b] = ptarray3[b];
+                }
+              } else {
+                nbinspt2or3 = nbinspt2;
+                for (int b=0; b<nbinspt2; b++) {
+                  ptarray2or3[b] = ptarray2[b];
+                }
+              }
+
+              for (int b=0; b<nbinspt2or3-1; b++) {
+                if (ptarray2or3[b] <= dpt && ptarray2or3[b+1] > dpt) {
                   if (isPbPb) {
                     h1DMeanPtFit[nidx][b]->Fill(dpt,weight*singleMuWeight*NcollWeight);
                   } else {
@@ -696,6 +748,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
                   }
                 }
               }
+              // End for ptarray2 or ptarray3
 
             }
           }
@@ -820,7 +873,11 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       cout << nidx<< " " << a << " " << c << " " << ymin << " " << ymax << " " << centmin << " " << centmax << endl;
       cout <<  h1DEffPtFit[nidx] << " " << h1DRecPtFit[nidx] << " " << h1DGenPtFit[nidx] << endl;
 
-      getCorrectedEffErr(nbinspt2-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
+      if (isForward(ymin,ymax)) {
+        getCorrectedEffErr(nbinspt3-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
+      } else {
+        getCorrectedEffErr(nbinspt2-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
+      }
 
       // Move pT values of histograms to <pT>
       cout << "\t\t" << h1DEffPtFit[nidx]->GetName() << endl;
@@ -828,7 +885,22 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       g1DEffPtFit[nidx]->SetName(Form("%s_GASM",h1DEffPtFit[nidx]->GetName()));
       g1DEffPtFit[nidx]->GetXaxis()->SetTitle("p_{T} (GeV/c)");
 
-      for (int b=0; b<nbinspt2-1; b++) {
+      // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+      int nbinspt2or3 = nbinspt2;
+      double ptarray2or3[100] = {0};
+      if (isForward(ymin,ymax)) {
+        nbinspt2or3 = nbinspt3;
+        for (int b=0; b<nbinspt3; b++) {
+          ptarray2or3[b] = ptarray3[b];
+        }
+      } else {
+        nbinspt2or3 = nbinspt2;
+        for (int b=0; b<nbinspt2; b++) {
+          ptarray2or3[b] = ptarray2[b];
+        }
+      }
+
+      for (int b=0; b<nbinspt2or3-1; b++) {
         double gx, gy;
         g1DEffPtFit[nidx]->GetPoint(b,gx,gy);
 
@@ -836,7 +908,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
 
         meanpt = h1DMeanPtFit[nidx][b]->GetMean();
 
-        double ptmin = ptarray2[b]; double ptmax = ptarray2[b+1];
+        double ptmin = ptarray2or3[b]; double ptmax = ptarray2or3[b+1];
         cout << "(b, nidx, gx, gy) : ("<< b << ", " << nidx << ", "
              << gx << ", " << gy << ")" <<  endl;
         cout << "ptmin, ptmax, meanpt : "<< ptmin << ", " << ptmax << ", " << meanpt << "" <<  endl;
@@ -852,11 +924,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       // end of move pT values of histograms to <pT>
 
       f1DEffPtFit[nidx]->SetParameters(0.5,4,8);
-      if ( (ymin==1.6 && ymax==2.0) ||
-           (ymin==2.0 && ymax==2.4) ||
-           (ymin==-2.0 && ymax==-1.6) ||
-           (ymin==-2.4 && ymax==-2.0)
-         ){
+      if (fabs(ymin)>=1.6 && fabs(ymax)<=2.4){
         f1DEffPtFit[nidx]->SetParLimits(1,-10,3);
       } else {
         f1DEffPtFit[nidx]->SetParLimits(1,-10,6.5);
@@ -909,6 +977,8 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
           f1DEffPtFit[nidx]->SetParameters(0.38,-0.42,6.4);
         } else if (ymin==2 && ymax==2.4) {
           f1DEffPtFit[nidx]->SetParameters(0.33,0.90,5.5);
+        } else if (ymin==2.1 && ymax==2.2) {
+          f1DEffPtFit[nidx]->SetParameters(0.32,1.14,5.61);
         }
       }
       
@@ -928,7 +998,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
 
 }
  
-void Eff3DMC::SaveHistos(string str) {
+void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) {
   outFileName = str;
   outfile = new TFile(outFileName.c_str(),"recreate");
   outfile->cd();
@@ -954,8 +1024,15 @@ void Eff3DMC::SaveHistos(string str) {
       h1DEffPtFit[nidx]->Write();
       f1DEffPtFit[nidx]->Write();
       g1DEffPtFit[nidx]->Write();
-      for (int b=0; b<nbinspt2-1; b++) {
-        h1DMeanPtFit[nidx][b]->Write();
+      // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+      if (isForward(yarray2[a],yarray2[a+1])) {
+        for (int b=0; b<nbinspt3-1; b++) {
+          h1DMeanPtFit[nidx][b]->Write();
+        }
+      } else {
+        for (int b=0; b<nbinspt2-1; b++) {
+          h1DMeanPtFit[nidx][b]->Write();
+        }
       }
     }
   }

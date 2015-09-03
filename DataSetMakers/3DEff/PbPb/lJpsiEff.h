@@ -25,15 +25,15 @@ using namespace std;
 //0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
 static const bool use3DCtau = true;
 
-bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
-//  if (ptmax<=6.5) return true;
-  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
-  else return false;
-}
-
 bool isForward(double ymin, double ymax) {
   if (fabs(ymin)==2.0 && fabs(ymax)==2.4) return true;
   else if (fabs(ymin)==2.4 && fabs(ymax)==2.0) return true;
+  else return false;
+}
+
+bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
+//  if (ptmax<=6.5) return true;
+  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
   else return false;
 }
 
@@ -452,7 +452,7 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
       int nbinspt2or3 = nbinspt2;
       double ptarray2or3[100] = {0};
-      if (isPbPb && isForward(ymin,ymax)) {
+      if (isForward(ymin,ymax)) {
         nbinspt2or3 = nbinspt3;
         for (int b=0; b<nbinspt3; b++) {
           ptarray2or3[b] = ptarray3[b];
@@ -739,7 +739,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
               // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
               int nbinspt2or3 = nbinspt2;
               double ptarray2or3[100] = {0};
-              if (isPbPb && isForward(yarray2[a],yarray2[a+1])) {
+              if (isForward(yarray2[a],yarray2[a+1])) {
                 nbinspt2or3 = nbinspt3;
                 for (int b=0; b<nbinspt3; b++) {
                   ptarray2or3[b] = ptarray3[b];
@@ -886,7 +886,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       cout << nidx<< " " << a << " " << c << " " << ymin << " " << ymax << " " << centmin << " " << centmax << endl;
       cout <<  h1DEffPtFit[nidx] << " " << h1DRecPtFit[nidx] << " " << h1DGenPtFit[nidx] << endl;
 
-      if (isPbPb && isForward(ymin,ymax)) {
+      if (isForward(ymin,ymax)) {
         getCorrectedEffErr(nbinspt3-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
       } else {
         getCorrectedEffErr(nbinspt2-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
@@ -901,7 +901,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
       int nbinspt2or3 = nbinspt2;
       double ptarray2or3[100] = {0};
-      if (isPbPb && isForward(ymin,ymax)) {
+      if (isForward(ymin,ymax)) {
         nbinspt2or3 = nbinspt3;
         for (int b=0; b<nbinspt3; b++) {
           ptarray2or3[b] = ptarray3[b];
@@ -937,11 +937,7 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
       // end of move pT values of histograms to <pT>
 
       f1DEffPtFit[nidx]->SetParameters(0.5,4,8);
-      if ( (ymin==1.6 && ymax==2.0) ||
-           (ymin==2.0 && ymax==2.4) ||
-           (ymin==-2.0 && ymax==-1.6) ||
-           (ymin==-2.4 && ymax==-2.0)
-         ){
+      if (fabs(ymin)>=1.6 && fabs(ymax)<=2.4){
         f1DEffPtFit[nidx]->SetParLimits(1,-10,3);
       } else {
         f1DEffPtFit[nidx]->SetParLimits(1,-10,6.5);
@@ -1043,7 +1039,7 @@ void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) 
       f1DEffPtFit[nidx]->Write();
       g1DEffPtFit[nidx]->Write();
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
-      if (isPbPb && isForward(yarray2[a],yarray2[a+1])) {
+      if (isForward(yarray2[a],yarray2[a+1])) {
         for (int b=0; b<nbinspt3-1; b++) {
           h1DMeanPtFit[nidx][b]->Write();
         }

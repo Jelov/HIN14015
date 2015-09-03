@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt69_Histos_v1.root",
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt912_Histos_v1.root",
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1215_Histos_v1.root",
-      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1530_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1530_Histos_v1.root"
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
     NPMC3D->SetTree();
     NPMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
     NPMC3D->GetEfficiency(yarray2, ptarray2, centarray2);
-    NPMC3D->SaveHistos("./NPMC3DAnaBins_eff.root");
+    NPMC3D->SaveHistos("./NPMC3DAnaBins_eff.root", nbinsy2, yarray2);
     delete NPMC3D;
 
   } else {
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt69_Histos_v1.root",
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt912_Histos_v1.root",
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1215_Histos_v1.root",
-      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1530_Histos_v1.root",
+      "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1530_Histos_v1.root"
     };
     int nfiles = sizeof(filelist)/sizeof(string);
     Eff3DMC *PRMC3D = new Eff3DMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
     PRMC3D->SetTree();
     PRMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
     PRMC3D->GetEfficiency(yarray2, ptarray2, centarray2);
-    PRMC3D->SaveHistos("./PRMC3DAnaBins_eff.root");
+    PRMC3D->SaveHistos("./PRMC3DAnaBins_eff.root", nbinsy2, yarray2);
     delete PRMC3D;
 
   }

@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
     NPMC3D->SetTree();
     NPMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
     NPMC3D->GetEfficiency(yarray2, ptarray2, centarray2);
-    NPMC3D->SaveHistos("./NPMC3DAnaBins_eff.root");
+    NPMC3D->SaveHistos("./NPMC3DAnaBins_eff.root", nbinsy2, yarray2);
     delete NPMC3D;
 
   } else {
@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     PRMC3D->SetTree();
     PRMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
     PRMC3D->GetEfficiency(yarray2, ptarray2, centarray2);
-    PRMC3D->SaveHistos("./PRMC3DAnaBins_eff.root");
+    PRMC3D->SaveHistos("./PRMC3DAnaBins_eff.root", nbinsy2, yarray2);
     delete PRMC3D;
 
   }
