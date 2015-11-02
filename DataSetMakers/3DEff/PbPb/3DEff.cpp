@@ -3,16 +3,18 @@
 
 int main(int argc, char *argv[]) {
   bool absRapidity, npmc, isPbPb;
+  int useTnP;
 
-  if (argc != 4) {
+  if (argc != 5) {
     cout << "Need input arguments!" << endl;
-    cout << "./3DEff [absRapidity] [NPMC(1) or PRMC(0)] [isPbPb(1) or ispp(0)]" <<endl;
+    cout << "./3DEff [absRapidity] [NPMC(1) or PRMC(0)] [isPbPb(1) or ispp(0)] [useTnP(0) or useTnP(1)]" <<endl;
     return -1;
   } else {
     absRapidity = atoi(argv[1]);
     npmc = atoi(argv[2]);
     isPbPb = atoi(argv[3]);
-    cout << "     absRapidity: " << absRapidity << " npmc: " << npmc << " isPbPb: " << isPbPb << endl;
+    useTnP = atoi(argv[4]);
+    cout << "     absRapidity: " << absRapidity << " npmc: " << npmc << " isPbPb: " << isPbPb << " useTnP: " << useTnP << endl;
   }
 
   gROOT->Macro("../JpsiStyle.C");
@@ -73,7 +75,7 @@ int main(int argc, char *argv[]) {
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    Eff3DMC *NPMC3D = new Eff3DMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb);
+    Eff3DMC *NPMC3D = new Eff3DMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb,useTnP);
     NPMC3D->CreateHistos(nbinsy, yarray, nbinsy2, yarray2, nbinspt, ptarray, nbinspt2, ptarray2, nbinscent, centarray, nbinscent2, centarray2, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray);
     NPMC3D->SetTree();
     NPMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);
@@ -99,7 +101,7 @@ int main(int argc, char *argv[]) {
       "/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_jpsiMuMu_JpsiPt1530_Histos_v1.root"
     };
     int nfiles = sizeof(filelist)/sizeof(string);
-    Eff3DMC *PRMC3D = new Eff3DMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
+    Eff3DMC *PRMC3D = new Eff3DMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb,useTnP);
     PRMC3D->CreateHistos(nbinsy, yarray, nbinsy2, yarray2, nbinspt, ptarray, nbinspt2, ptarray2, nbinscent, centarray, nbinscent2, centarray2, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray);
     PRMC3D->SetTree();
     PRMC3D->LoopTree(yarray, yarray2, ptarray, ptarray2, centarray, centarray2);

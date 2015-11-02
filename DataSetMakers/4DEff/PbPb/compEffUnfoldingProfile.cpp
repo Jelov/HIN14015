@@ -29,11 +29,11 @@ return false;
 }
 
 double fitPol1(double *x, double *par) {
-  return par[0]*(x[0]-par[1]) + par[2];
+  return (x[0]*par[0]-par[1]) + par[2];
 }
 
 double fitPol2(double *x, double *par) {
-  return par[0]*(x[0]/par[1]-par[2]) + par[3];
+  return TMath::Power((x[0]*par[0]-par[1]), 2) + par[2];
 }
 
 double fitExp(double *x, double *par) {
@@ -65,13 +65,13 @@ void SetHistStyle(TGraph *h, int i, int j, double rmin, double rmax){
     h->SetMarkerColor(colorArr[i]);
     h->SetLineColor(colorArr[i]);
   } else {
-    h->SetMarkerColor(kBlack);
-    h->SetLineColor(kBlack);
+    h->SetMarkerColor(colorArr[i%ncolor]);
+    h->SetLineColor(colorArr[i%ncolor]);
   }
   if (nmarker>j) {
     h->SetMarkerStyle(markerArr[j]);
   } else {
-    h->SetMarkerStyle(kOpenCircle);
+    h->SetMarkerStyle(markerArr[j%nmarker]);
   }
 
   h->GetXaxis()->SetTitleSize(0.048);
@@ -97,13 +97,13 @@ void SetHistStyle(TH1 *h, int i, int j, double rmin, double rmax){
     h->SetMarkerColor(colorArr[i]);
     h->SetLineColor(colorArr[i]);
   } else {
-    h->SetMarkerColor(kBlack);
-    h->SetLineColor(kBlack);
+    h->SetMarkerColor(colorArr[i%ncolor]);
+    h->SetLineColor(colorArr[i%ncolor]);
   }
   if (nmarker>j) {
     h->SetMarkerStyle(markerArr[j]);
   } else {
-    h->SetMarkerStyle(20+j);
+    h->SetMarkerStyle(markerArr[j%nmarker]);
   }
 
   h->SetTitleSize(0.048,"XYZ");
@@ -247,38 +247,294 @@ void SuperImposeRatio(TH1D *heffProf[], TH1D *heffSimUnf[], TH1D *heffRatio[], c
 
 }
 
-void LxyEff_3D(TH1D *hNPEff[], const string title, const int nbinsy, const double *yarray, const int nbinspt, const double *ptarray, const int nbinscent, const int *centarray, const int nbinsctau, const double *ctauarray, bool isPbPb, bool absRapidity) {
+void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
+  for (int a=0; a<nbins; a++) {
+    double genInt = hgen->GetBinContent(a+1);
+    double genErr = hgen->GetBinError(a+1);
+    double recInt = hrec->GetBinContent(a+1);
+    double recErr = hrec->GetBinError(a+1);
+    double eff = recInt / genInt;
+
+    double tmpErrGen1 = TMath::Power(eff,2) / TMath::Power(genInt,2);
+    double tmpErrRec1 = TMath::Power(recErr,2);
+    double tmpErr1 = tmpErrGen1 * tmpErrRec1;
+
+    double tmpErrGen2 = TMath::Power(1-eff,2) / TMath::Power(genInt,2);
+    double tmpErrRec2 = TMath::Abs(TMath::Power(genErr,2) - TMath::Power(recErr,2));
+    double tmpErr2 = tmpErrGen2 * tmpErrRec2;
+    double effErr = TMath::Sqrt(tmpErr1 + tmpErr2);
+
+    if (genInt == 0) {
+      heff->SetBinContent(a+1, 0);
+      heff->SetBinError(a+1, 0);
+    } else {
+      heff->SetBinContent(a+1, eff);
+      heff->SetBinError(a+1, effErr);
+    }
+  }
+}
+
+void LxyEff_3D(TFile *output, TFile *file3DEff[], TFile *file3DCT[], TH1D *hNPEff[], const string title, const int nbinsy, const double *yarray, const int nbinspt, const double *ptarray, const int nbinscent, const int *centarray, const int nbinsctau, const double *ctauarray, bool isPbPb, bool absRapidity) {
   bool logy=false;
   gROOT->Macro("./JpsiStyle.C");
   gStyle->SetPadLeftMargin(0.15);
   gStyle->SetTitleYOffset(1.5);
 
+  cout << file3DCT[0]->GetName() << endl;
+  cout << file3DCT[1]->GetName() << endl;
+  cout << file3DCT[2]->GetName() << endl;
+  cout << file3DCT[3]->GetName() << endl;
+  cout << file3DCT[4]->GetName() << endl;
+  cout << file3DCT[5]->GetName() << endl;
+  cout << file3DCT[6]->GetName() << endl;
+  cout << file3DCT[7]->GetName() << endl;
+
   TLatex *lat = new TLatex(); lat->SetNDC(kTRUE); lat->SetTextSize(0.04);
    
+  const double yarray2[]       = {-2.4, -2.0, -1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6, 2.0, 2.4};
+  const double ptarray2[]      = {6.5, 7.5, 9.0, 11, 13, 16, 30.0};
+  const double ptarray3[]      = {3.0, 4.5, 6.5};
+  const int centarray2[]       = {0, 4, 8, 16, 40};
+
+  int nbinsy2 = sizeof(yarray2)/sizeof(double) -1;
+  int nbinspt2 = sizeof(ptarray2)/sizeof(double) -1;
+  int nbinspt3 = sizeof(ptarray3)/sizeof(double) -1;
+  int nbinscent2 = sizeof(centarray2)/sizeof(int) -1;
+
   double _ymin=yarray[0]; double _ymax=yarray[nbinsy];
   double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt];
   int _centmin=centarray[0]; int _centmax=centarray[nbinscent];
   
-  const int hnum = nbinsy*nbinscent;
+  const int hnum = 100; //nbinsy*nbinspt*nbinscent;
 
-  TH1D *heff[hnum];   // pT eff histograms for each (y, cent) bin, whole Lxy(reco) range is included 
+  // Original 3D efficiency
+  TH1D *h3DNPEff[hnum];
+  TH1D *h3DPREff[hnum];
+  TH1D *h3DNPEff_LowPt[hnum];
+  TH1D *h3DPREff_LowPt[hnum];
+  TH1D *h3DNPEff_ForwHighPt[hnum];
+  TH1D *h3DPREff_ForwHighPt[hnum];
+
+  // Re-made 3D efficiency
+  // pT eff histograms for each (y, cent) bin, whole Lxy(reco) range is include
+  TH1D *hNPeff[hnum];
+  TH1D *hPReff[hnum];
+  TH1D *hNPeff_LowPt[hnum];
+  TH1D *hPReff_LowPt[hnum];
+  TH1D *hNPeff_ForwHighPt[hnum];
+  TH1D *hPReff_ForwHighPt[hnum];
+  // Read from 3D efficiency files, 3D efficiency divided into several regions
+  TH1D *h3DNPeffNume[hnum];
+  TH1D *h3DPReffNume[hnum];
+  TH1D *h3DNPeffNume_LowPt[hnum];
+  TH1D *h3DPReffNume_LowPt[hnum];
+  TH1D *h3DNPeffNume_ForwHighPt[hnum];
+  TH1D *h3DPReffNume_ForwHighPt[hnum];
+  TH1D *h3DNPeffDeno[hnum];
+  TH1D *h3DPReffDeno[hnum];
+  TH1D *h3DNPeffDeno_LowPt[hnum];
+  TH1D *h3DPReffDeno_LowPt[hnum];
+  TH1D *h3DNPeffDeno_ForwHighPt[hnum];
+  TH1D *h3DPReffDeno_ForwHighPt[hnum];
+
+  // Read from 3D efficiency files, histos of eff_pT * 3D efficiency (=Numerators)
+  TH1D *h3DNPct[hnum];
+  TH1D *h3DPRct[hnum];
+  TH1D *h3DNPct_LowPt[hnum];
+  TH1D *h3DPRct_LowPt[hnum];
+  TH1D *h3DNPct_ForwHighPt[hnum];
+  TH1D *h3DPRct_ForwHighPt[hnum];
+
+  // Read from 3D efficiency files, histos of 3D efficiency, normal gen histos (=Denominators)
+  TH1D *h3DNPgen[hnum];
+  TH1D *h3DPRgen[hnum];
+  TH1D *h3DNPgen_LowPt[hnum];
+  TH1D *h3DPRgen_LowPt[hnum];
+  TH1D *h3DNPgen_ForwHighPt[hnum];
+  TH1D *h3DPRgen_ForwHighPt[hnum];
+
+  // Loading gen, eff*gen histograms
+  for (int a=0; a<nbinsy2; a++) {
+    double ymin=yarray2[a]; double ymax=yarray2[a+1];
+    for (int c=0; c<nbinscent2; c++) {
+      int centmin=centarray2[c]; int centmax=centarray2[c+1];
+      int idx = a*nbinscent2 + c;
+      double ptmin=6.5; double ptmax=30;
+
+      if (ymin>=0 && ymax>=0) {
+        if (TMath::Abs(_ymin)<=1.6 && TMath::Abs(_ymax)<=1.6 && TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) {
+          h3DPRct[idx] = (TH1D*)file3DCT[0]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct[idx] = (TH1D*)file3DCT[2]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen[idx] = (TH1D*)file3DEff[0]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen[idx] = (TH1D*)file3DEff[2]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "342" << endl;
+          cout << _ymin << " " << _ymax << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+          cout << h3DPRct[idx]->GetName() << " " << h3DNPct[idx]->GetName() << " " << h3DPRgen[idx]->GetName() << " " << h3DNPgen[idx]->GetName() << endl;
+        } else if (TMath::Abs(_ymin)>=1.6 && TMath::Abs(_ymax)>1.6 && TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6) {
+          ptmin=3; ptmax=6.5;
+          h3DPRct_LowPt[idx] = (TH1D*)file3DCT[0]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct_LowPt[idx] = (TH1D*)file3DCT[2]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen_LowPt[idx] = (TH1D*)file3DEff[0]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen_LowPt[idx] = (TH1D*)file3DEff[2]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "360" << endl;
+          cout << _ymin << " " << _ymax << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+          cout << h3DPRct_LowPt[idx]->GetName() << " " << h3DNPct_LowPt[idx]->GetName() << " " << h3DPRgen_LowPt[idx]->GetName() << " " << h3DNPgen_LowPt[idx]->GetName() << endl;
+          ptmin=6.5; ptmax=30;
+          h3DPRct_ForwHighPt[idx] = (TH1D*)file3DCT[1]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct_ForwHighPt[idx] = (TH1D*)file3DCT[3]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen_ForwHighPt[idx] = (TH1D*)file3DEff[1]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen_ForwHighPt[idx] = (TH1D*)file3DEff[3]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "350" << endl;
+          cout << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+          cout << h3DPRct_ForwHighPt[idx]->GetName() << " " << h3DNPct_ForwHighPt[idx]->GetName() << " " << h3DPRgen_ForwHighPt[idx]->GetName() << " " << h3DNPgen_ForwHighPt[idx]->GetName() << endl;
+        }
+      } else {
+        if (TMath::Abs(_ymin)<=1.6 && TMath::Abs(_ymax)<=1.6 && TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) {
+          h3DPRct[idx] = (TH1D*)file3DCT[4]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct[idx] = (TH1D*)file3DCT[6]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen[idx] = (TH1D*)file3DEff[4]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen[idx] = (TH1D*)file3DEff[6]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "371" << endl;
+          cout << _ymin << " " << _ymax << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+          cout << h3DPRct[idx]->GetName() << " " << h3DNPct[idx]->GetName() << " " << h3DPRgen[idx]->GetName() << " " << h3DNPgen[idx]->GetName() << endl;
+        } else if (TMath::Abs(_ymin)>1.6 && TMath::Abs(_ymax)>=1.6 && TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6) {
+          ptmin=3; ptmax=6.5;
+          h3DPRct_LowPt[idx] = (TH1D*)file3DCT[4]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct_LowPt[idx] = (TH1D*)file3DCT[6]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen_LowPt[idx] = (TH1D*)file3DEff[4]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen_LowPt[idx] = (TH1D*)file3DEff[6]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "387" << endl;
+          cout << _ymin << " " << _ymax << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+//          cout << h3DPRct_LowPt[idx]->GetName() << " " << h3DNPct_LowPt[idx]->GetName() << " " << h3DPRgen_LowPt[idx]->GetName() << " " << h3DNPgen_LowPt[idx]->GetName() << endl;
+          ptmin=6.5; ptmax=30;
+          h3DPRct_ForwHighPt[idx] = (TH1D*)file3DCT[5]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPct_ForwHighPt[idx] = (TH1D*)file3DCT[7]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DPRgen_ForwHighPt[idx] = (TH1D*)file3DEff[5]->Get(Form("h1DGenPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          h3DNPgen_ForwHighPt[idx] = (TH1D*)file3DEff[7]->Get(Form("h1DGenPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,ptmin,ptmax,centmin,centmax));
+          cout << "379" << endl;
+          cout << _ymin << " " << _ymax << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+//          cout << h3DPRct_ForwHighPt[idx]->GetName() << " " << h3DNPct_ForwHighPt[idx]->GetName() << " " << h3DPRgen_ForwHighPt[idx]->GetName() << " " << h3DNPgen_ForwHighPt[idx]->GetName() << endl;
+        }
+      }
+
+    } // end of nbinscent2 loop
+    
+  } // end of nbinsy2 loop
+  // end of gen, eff*gen histogram loading
+
+  TLegend *leg = new TLegend(0.19,0.72,0.60,0.83);
+  SetLegendStyle(leg);
+  
+  // Add denominator histos and numerator histos in mid-rapidity, forward rapidity regions
   for (int a=0; a<nbinsy; a++) {
     double ymin=yarray[a]; double ymax=yarray[a+1];
     if (ymin==-1.6 && ymax==1.6) continue;
 
-    TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
-    canvNP->Draw();
+    if (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6) {
+      _ptmin=3; _ptmax=6.5;
+      hNPeff_LowPt[a] = new TH1D(Form("Final_LowPt_hNP3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      hPReff_LowPt[a] = new TH1D(Form("Final_LowPt_hPR3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      _ptmin=6.5; _ptmax=30;
+      hNPeff_ForwHighPt[a] = new TH1D(Form("Final_ForwHighPt_hNP3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      hPReff_ForwHighPt[a] = new TH1D(Form("Final_ForwHighPt_hPR3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+    } else {
+      hNPeff[a] = new TH1D(Form("Final_hNP3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      hPReff[a] = new TH1D(Form("Final_hPR3DEffpT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+    }
+
+    if (ymin>=0 && ymax>=0) {
+      if (TMath::Abs(_ymin)<=1.6 && TMath::Abs(_ymax)<=1.6 && TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) {
+        h3DPREff[a] = (TH1D*)file3DEff[0]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff[a] = (TH1D*)file3DEff[2]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      } else if (TMath::Abs(_ymin)>=1.6 && TMath::Abs(_ymax)>1.6 && TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6) {
+        _ptmin=6.5; _ptmax=30;
+        h3DPREff_ForwHighPt[a] = (TH1D*)file3DEff[1]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff_ForwHighPt[a] = (TH1D*)file3DEff[3]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        _ptmin=3; _ptmax=6.5;
+        h3DPREff_LowPt[a] = (TH1D*)file3DEff[0]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff_LowPt[a] = (TH1D*)file3DEff[2]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        cout << Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax) << endl;
+        cout << h3DPREff_LowPt[a] << " " << h3DPREff_ForwHighPt[a] << " " << h3DNPEff_LowPt[a] << " " << h3DNPEff_ForwHighPt[a] << endl;
+      }
+    } else {        
+      if (TMath::Abs(_ymin)<=1.6 && TMath::Abs(_ymax)<=1.6 && TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) {
+        h3DPREff[a] = (TH1D*)file3DEff[4]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff[a] = (TH1D*)file3DEff[6]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      } else if (TMath::Abs(_ymin)>1.6 && TMath::Abs(_ymax)>=1.6 && TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6) {
+        _ptmin=6.5; _ptmax=30;
+        h3DPREff_ForwHighPt[a] = (TH1D*)file3DEff[5]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff_ForwHighPt[a] = (TH1D*)file3DEff[7]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        _ptmin=3; _ptmax=6.5;
+        h3DPREff_LowPt[a] = (TH1D*)file3DEff[4]->Get(Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        h3DNPEff_LowPt[a] = (TH1D*)file3DEff[6]->Get(Form("h1DEffPt_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+        cout << Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",ymin,ymax,_ptmin,_ptmax,_centmin,_centmax) << endl;
+        cout << h3DPREff_LowPt[a] << " " << h3DPREff_ForwHighPt[a] << " " << h3DNPEff_LowPt[a] << " " << h3DNPEff_ForwHighPt[a] << endl;
+      }
+    }
+    _ptmin=ptarray[0]; _ptmax=ptarray[nbinspt];
+
+
+    if ((TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) || (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6)) {
+      h3DNPeffNume_LowPt[a] = new TH1D(Form("hNP3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,3,6.5,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      h3DPReffNume_LowPt[a] = new TH1D(Form("hPR3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,3,6.5,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      h3DNPeffNume_ForwHighPt[a] = new TH1D(Form("hNP3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,6.5,30,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DPReffNume_ForwHighPt[a] = new TH1D(Form("hPR3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,6.5,30,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DNPeffDeno_LowPt[a] = new TH1D(Form("hNP3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,3,6.5,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      h3DPReffDeno_LowPt[a] = new TH1D(Form("hPR3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,3,6.5,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt3,ptarray3);
+      h3DNPeffDeno_ForwHighPt[a] = new TH1D(Form("hNP3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,6.5,30,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DPReffDeno_ForwHighPt[a] = new TH1D(Form("hPR3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,6.5,30,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+    } else {
+      h3DNPeffNume[a] = new TH1D(Form("hNP3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DPReffNume[a] = new TH1D(Form("hPR3DEffNumepT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DNPeffDeno[a] = new TH1D(Form("hNP3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+      h3DPReffDeno[a] = new TH1D(Form("hPR3DEffDenopT_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax),";p_{T} (GeV/c);Efficiency",nbinspt2,ptarray2);
+    }
+
+    // Add sub-range histos
+    for (int A=0; A<nbinsy2; A++) {
+      double ymin2=yarray2[A]; double ymax2=yarray2[A+1];
+      if (ymin2>=ymin && ymax2<=ymax) {
+        for (int C=0; C<nbinscent2; C++) {
+          int centmin=centarray2[C]; int centmax=centarray2[C+1];
+          cout << "ymin: " << ymin << " ymax: " << ymax << " ymin2: " << ymin2 << " ymax2: " << ymax2 ;
+          cout << " centmin: " << centmin << " centmax " << centmax << endl;
+          int idx = A*nbinscent2 + C;
+          cout << "a: " << a << " A " << A << " C " << C << " idx: " << idx << endl;
+
+          if ((TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) || (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6)) {
+            cout << "before add:\n\t" << h3DPRct_LowPt[idx]->GetName() << "\n\t" << h3DPRct_ForwHighPt[idx]->GetName() << endl;
+            cout << "\t" << h3DNPct_LowPt[idx]->GetName() << "\n\t" << h3DNPct_ForwHighPt[idx]->GetName() << endl;
+            h3DPReffNume_LowPt[a]->Add(h3DPRct_LowPt[idx]);
+            h3DNPeffNume_LowPt[a]->Add(h3DNPct_LowPt[idx]);
+            h3DPReffNume_ForwHighPt[a]->Add(h3DPRct_ForwHighPt[idx]);
+            h3DNPeffNume_ForwHighPt[a]->Add(h3DNPct_ForwHighPt[idx]);
+            h3DPReffDeno_LowPt[a]->Add(h3DPRgen_LowPt[idx]);
+            h3DNPeffDeno_LowPt[a]->Add(h3DNPgen_LowPt[idx]);
+            h3DPReffDeno_ForwHighPt[a]->Add(h3DPRgen_ForwHighPt[idx]);
+            h3DNPeffDeno_ForwHighPt[a]->Add(h3DNPgen_ForwHighPt[idx]);
+          } else {
+            cout << "before add:\n\t" << h3DPRct[idx]->GetName() << "\n\t" << h3DNPct[idx]->GetName() << endl;
+            h3DPReffNume[a]->Add(h3DPRct[idx]);
+            h3DNPeffNume[a]->Add(h3DNPct[idx]);
+            h3DPReffDeno[a]->Add(h3DPRgen[idx]);
+            h3DNPeffDeno[a]->Add(h3DNPgen[idx]);
+          }
+        } // end of nbinscent2 loop
+      } // end of ymin2>=ymin && ymax2<=ymax condition test
+    } // end of nbinsy2 loop
+
+    // Divide added sub-range histos
+    if ((TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) || (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6)) {
+      hPReff_LowPt[a]->Divide(h3DPReffNume_LowPt[a],h3DPReffDeno_LowPt[a]);
+      hNPeff_LowPt[a]->Divide(h3DNPeffNume_LowPt[a],h3DNPeffDeno_LowPt[a]);
+      hPReff_ForwHighPt[a]->Divide(h3DPReffNume_ForwHighPt[a],h3DPReffDeno_ForwHighPt[a]);
+      hNPeff_ForwHighPt[a]->Divide(h3DNPeffNume_ForwHighPt[a],h3DNPeffDeno_ForwHighPt[a]);
+    } else {
+      hPReff[a]->Divide(h3DPReffNume[a],h3DPReffDeno[a]);
+      hNPeff[a]->Divide(h3DNPeffNume[a],h3DNPeffDeno[a]);
+    }
     
-    TLegend *leg = new TLegend(0.19,0.65,0.55,0.83);
-    SetLegendStyle(leg);
-   
-    for (int c=0; c<nbinscent; c++) {
-      int centmin=centarray[c]; int centmax=centarray[c+1];
-      int idx = a*nbinscent + c;
-
-      heff[idx] = new TH1D(Form("heffpT_Rap%.1f-%.1f_Cent%d-%d",ymin,ymax,centmin,centmax),";p_{T} (GeV/c);Efficiency",nbinspt,ptarray);
-
-      for (int b=0; b<nbinspt; b++) {
+/*      for (int b=0; b<nbinspt; b++) {
         double ptmin=ptarray[b]; double ptmax=ptarray[b+1];
         int nidx = a*nbinspt*nbinscent + b*nbinscent + c;
 
@@ -286,55 +542,182 @@ void LxyEff_3D(TH1D *hNPEff[], const string title, const int nbinsy, const doubl
         for (int d=0; d<nbinsctau; d++) {
           totalCont = totalCont + hNPEff[nidx]->GetBinContent(d+1);
           totalErr = totalErr + TMath::Power(hNPEff[nidx]->GetBinError(d+1),2);
+
+          // For PR J/psi, take only the 1st bin of ctau eff
+          if (d==0) {
+            int hbin = hPReff[idx]->FindBin(ptmin);
+            hPReff[idx]->SetBinContent(hbin,totalCont);
+            hPReff[idx]->SetBinError(hbin,totalErr);
+          }
         }
         totalCont = totalCont / nbinsctau;  // average Lxy efficiency for a given pT bin
         totalErr = TMath::Sqrt(totalErr);   // average Lxy efficienicy error for a given pT bin
 
-        int hbin = heff[idx]->FindBin(ptmin);
-        heff[idx]->SetBinContent(hbin,totalCont);
-        heff[idx]->SetBinError(hbin,totalErr);
+        int hbin = hNPeff[idx]->FindBin(ptmin);
+        hNPeff[idx]->SetBinContent(hbin,totalCont);
+        hNPeff[idx]->SetBinError(hbin,totalErr);
       }
+      // end of filling up re-made 3D eff from 4D eff
 
-      if (logy) {
-        canvNP->SetLogy(1);
-        SetHistStyle(heff[idx],c,a,1E-3,5.3);
-      } else {
-        SetHistStyle(heff[idx],c,a,0,1.3);
-      }
-
-      if (c==0) {
-        heff[idx]->Draw("pe");
-      } else {
-        heff[idx]->Draw("pe, same");
-      }
-
-      std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, _ptmin, _ptmax, absRapidity);
-      if (c==0) {
-        if (isPbPb) {
-          lat->DrawLatex(0.21,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-        } else {
-          lat->DrawLatex(0.21,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+      // concatenate 3-6.5 and 6.5-30 at forward rapidity region, 3D eff
+      for (int b=0; b<nbinspt; b++) {
+        double ptmin=ptarray[b]; double ptmax=ptarray[b+1];
+        if (!(TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6)) {
+          if (ptmax<=6.5) {
+            cout << "lowpt effpt fill: " << h3DPReff_LowPt[idx]->GetName() << " " << h3DPReff_LowPt[idx]->GetBinLowEdge(b+1) << endl;
+            int xbin = h3DPReff_LowPt[idx]->FindBin(ptmin);
+            h3DPReff[idx]->SetBinContent(b+1,h3DPReff_LowPt[idx]->GetBinContent(xbin));
+            h3DNPeff[idx]->SetBinContent(b+1,h3DNPeff_LowPt[idx]->GetBinContent(xbin));
+          } else {
+            cout << "highpt effpt fill: " << h3DPReff_LowPt[idx]->GetName() << " " << h3DPReff_LowPt[idx]->GetBinLowEdge(b+1) << endl;
+            int xbin = h3DPReff_ForwHighPt[idx]->FindBin(ptmin);
+            h3DPReff[idx]->SetBinContent(b+1,h3DPReff_ForwHighPt[idx]->GetBinContent(xbin));
+            h3DNPeff[idx]->SetBinContent(b+1,h3DNPeff_ForwHighPt[idx]->GetBinContent(xbin));
+          }
         }
-        lat->DrawLatex(0.21,0.85,testStr.second.c_str());
       }
-      if (isPbPb) leg->AddEntry(heff[idx],Form("Cent %.0f-%.0f%%",centmin*2.5,centmax*2.5),"pe");
-    } // end of cent loop
+      // end of concatenate 3-6.5 and 6.5-30 at forward rapidity region, 3D eff
+*/
+      
+    TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
+    canvNP->Draw();
+    TCanvas *canv1 = new TCanvas("canv1","c",600,600);
+    canv1->Draw();
+    TCanvas *canv2 = new TCanvas("canv2","c",600,600);
+    canv2->Draw();
 
-    leg->Draw();
-    canvNP->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
-    canvNP->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
-    
-    delete leg;
-    delete canvNP;
-
-    for (int c=0; c<nbinscent; c++) {
-      int idx = a*nbinscent + c;
-      delete heff[idx];
+    if (logy) {
+      canvNP->SetLogy(1);
+      if ((TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) || (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6)) {
+        SetHistStyle(hNPeff_LowPt[a],0,0,1E-3,5.3);
+        SetHistStyle(hPReff_LowPt[a],1,1,1E-3,5.3);
+        SetHistStyle(h3DNPEff_LowPt[a],0,0,1E-3,5.3);
+        SetHistStyle(h3DPREff_LowPt[a],1,1,1E-3,5.3);
+        h3DNPEff_LowPt[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff_LowPt[a]->SetMarkerStyle(kFullSquare);
+        SetHistStyle(hNPeff_ForwHighPt[a],0,0,1E-3,5.3);
+        SetHistStyle(hPReff_ForwHighPt[a],1,1,1E-3,5.3);
+        SetHistStyle(h3DNPEff_ForwHighPt[a],0,0,1E-3,5.3);
+        SetHistStyle(h3DPREff_ForwHighPt[a],1,1,1E-3,5.3);
+        h3DNPEff_ForwHighPt[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff_ForwHighPt[a]->SetMarkerStyle(kFullSquare);
+      } else {
+        SetHistStyle(hNPeff[a],0,0,1E-3,5.3);
+        SetHistStyle(hPReff[a],1,1,1E-3,5.3);
+        SetHistStyle(h3DNPEff[a],0,0,1E-3,5.3);
+        SetHistStyle(h3DPREff[a],1,1,1E-3,5.3);
+        h3DNPEff[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff[a]->SetMarkerStyle(kFullSquare);
+      }
+    } else {
+      if ((TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) || (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6)) {
+        SetHistStyle(hNPeff_LowPt[a],0,0,0,1.3);
+        SetHistStyle(hPReff_LowPt[a],1,1,0,1.3);
+        SetHistStyle(h3DNPEff_LowPt[a],0,0,0,1.3);
+        SetHistStyle(h3DPREff_LowPt[a],1,1,0,1.3);
+        h3DNPEff_LowPt[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff_LowPt[a]->SetMarkerStyle(kFullSquare);
+        SetHistStyle(hNPeff_ForwHighPt[a],0,0,0,1.3);
+        SetHistStyle(hPReff_ForwHighPt[a],1,1,0,1.3);
+        SetHistStyle(h3DNPEff_ForwHighPt[a],0,0,0,1.3);
+        SetHistStyle(h3DPREff_ForwHighPt[a],1,1,0,1.3);
+        h3DNPEff_ForwHighPt[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff_ForwHighPt[a]->SetMarkerStyle(kFullSquare);
+      } else {
+        SetHistStyle(hNPeff[a],0,0,0,1.3);
+        SetHistStyle(hPReff[a],1,1,0,1.3);
+        SetHistStyle(h3DNPEff[a],0,0,0,1.3);
+        SetHistStyle(h3DPREff[a],1,1,0,1.3);
+        h3DNPEff[a]->SetMarkerStyle(kFullCircle);
+        h3DPREff[a]->SetMarkerStyle(kFullSquare);
+      }
     }
+    
+    if (a==0) {
+      if (isPbPb) {
+        leg->AddEntry(hPReff[a],Form("PR J/#psi test, Cent %.0f-%.0f%%",_centmin*2.5,_centmax*2.5),"pe");
+        leg->AddEntry(hNPeff[a],Form("NP J/#psi test, Cent %.0f-%.0f%%",_centmin*2.5,_centmax*2.5),"pe");
+        leg->AddEntry(h3DPREff[a],Form("PR J/#psi orig, Cent %.0f-%.0f%%",_centmin*2.5,_centmax*2.5),"pe");
+        leg->AddEntry(h3DNPEff[a],Form("NP J/#psi orig, Cent %.0f-%.0f%%",_centmin*2.5,_centmax*2.5),"pe");
+      } else {
+        leg->AddEntry(hPReff[a],Form("PR J/#psi, test"),"pe");
+        leg->AddEntry(hNPeff[a],Form("NP J/#psi, test"),"pe");
+        leg->AddEntry(h3DPREff[a],Form("PR J/#psi, orig"),"pe");
+        leg->AddEntry(h3DNPEff[a],Form("NP J/#psi, orig"),"pe");
+      }
+    }
+    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, _ptmin, _ptmax, absRapidity);
 
-  } // end of rap loop
+    if ((ymin>=0 && ymax>=0 && TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>1.6) ||
+        (ymin<0 && ymax<0 && TMath::Abs(ymin)>1.6 && TMath::Abs(ymax)>=1.6) ) {
+      _ptmin=3; _ptmax=6.5;
+      canv1->cd();
+      cout<< hNPeff_LowPt[a]->GetName() << "\n" << hPReff_LowPt[a]->GetName() << "\n" << h3DPREff_LowPt[a]->GetName() << "\n" << h3DNPEff_LowPt[a]->GetName() << endl;
+      cout << "654" << endl;
+      hNPeff_LowPt[a]->Draw("pe");
+      hPReff_LowPt[a]->Draw("pe, same");
+      h3DPREff_LowPt[a]->Draw("pe, same");
+      h3DNPEff_LowPt[a]->Draw("pe, same");
+      leg->Draw();
+      cout << "662 " << Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax) << endl;
+      if (isPbPb) lat->DrawLatex(0.21,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+      else lat->DrawLatex(0.21,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+      lat->DrawLatex(0.21,0.85,testStr.second.c_str());
+      canv1->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      canv1->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      
+      _ptmin=6.5; _ptmax=30;
+      canv2->cd();
+      hNPeff_ForwHighPt[a]->Draw("pe");
+      hPReff_ForwHighPt[a]->Draw("pe, same");
+      h3DPREff_ForwHighPt[a]->Draw("pe, same");
+      h3DNPEff_ForwHighPt[a]->Draw("pe, same");
+      leg->Draw();
+      cout << "672 " << Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax) << endl;
+      if (isPbPb) lat->DrawLatex(0.21,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+      else lat->DrawLatex(0.21,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+      lat->DrawLatex(0.21,0.85,testStr.second.c_str());
+      canv2->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      canv2->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+    } else {
+      canvNP->cd();
+      hNPeff[a]->Draw("pe");
+      hPReff[a]->Draw("pe, same");
+      h3DPREff[a]->Draw("pe, same");
+      h3DNPEff[a]->Draw("pe, same");
+      leg->Draw();
+      cout << "674 " << Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax) << endl;
+      if (isPbPb) lat->DrawLatex(0.21,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+      else lat->DrawLatex(0.21,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+      lat->DrawLatex(0.21,0.85,testStr.second.c_str());
+      canvNP->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+      canvNP->SaveAs(Form("./3DEff_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",title.c_str(),ymin,ymax,_ptmin,_ptmax,_centmin,_centmax));
+    }
+    _ptmin=ptarray[0]; _ptmax=ptarray[nbinspt];
+
+/*    for (int c=0; c<nbinscent2; c++) {
+      int idx = a*nbinscent2 + c;
+      output->cd();
+      cout << "Write(): idx " << " " << hNPeff[idx]->GetName() << endl;;
+      cout << "Write(): idx " << " " << hPReff[idx]->GetName() << endl;
+      hNPeff[idx]->Write();
+      hPReff[idx]->Write();
+
+      delete h3DNPEff[idx];
+      delete h3DPREff[idx];
+      delete hNPeff[idx];
+      delete hPReff[idx];
+    }
+  */  
+    delete canvNP;
+    delete canv1;
+    delete canv2;
+
+  } // end of yarray loop
 
   delete lat;
+  delete leg;
+
 
 }
 
@@ -465,7 +848,7 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
 
       leg->Draw();
 
-      lat->SetTextSize(0.030);
+      lat->SetTextSize(0.035);
 
       for (int c=0; c<nbinscent; c++) {
         int centmin=centarray[c]; int centmax=centarray[c+1];
@@ -475,22 +858,22 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
 
         if (c==0) { // Draw equation for the 1st time
           if (isPbPb) {
-            if ( (ymin==1.2 && ymax==1.6 && ptmin==16 && ptmax==30 && centmin==0 && centmax==40) ||
-                  isForwardLowpT(ymin, ymax, ptmin, ptmax) ){
-               lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
-            } else lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
-          } else lat->DrawLatex(0.68,0.85,Form("p0 #times (x-p1) + p2"));
+            if ( TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6 ) lat->DrawLatex(0.70,0.85,Form("(p0 #times x - p1) + p2"));
+            else lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
+          } else lat->DrawLatex(0.70,0.85,Form("(p0 #times x - p1) + p2"));
         }
 
         lat->SetTextColor(colorArr[c]);
 
-        if (isPbPb) lat->DrawLatex(0.70,0.80-(c*0.20),Form("p_{T} %.1f-%.1f, %.0f-%.0f%%",ptmin,ptmax,centmin*2.5,centmax*2.5));
-        else lat->DrawLatex(0.70,0.80-(c*0.20),Form("p_{T} %.1f-%.1f",ptmin,ptmax));
+        if (isPbPb) lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f, %.0f-%.0f%%",ptmin,ptmax,centmin*2.5,centmax*2.5));
+        else lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f",ptmin,ptmax));
         lat->DrawLatex(0.70,0.77-(c*0.20),Form("#chi^{2}/ndf = %.2f / %d",fitf->GetChisquare(),fitf->GetNDF()));
         lat->DrawLatex(0.70,0.74-(c*0.20),Form("p0 = %.2f #pm %.3f",fitf->GetParameter(0),fitf->GetParError(0)));
         lat->DrawLatex(0.70,0.71-(c*0.20),Form("p1 = %.2f #pm %.3f",fitf->GetParameter(1),fitf->GetParError(1)));
         lat->DrawLatex(0.70,0.68-(c*0.20),Form("p2 = %.2f #pm %.3f",fitf->GetParameter(2),fitf->GetParError(2)));
-        if (isPbPb) lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
+        if (isPbPb && (TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) ) {
+          lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
+        }
       }
       lat->SetTextSize(0.042);
       lat->SetTextColor(kBlack);
@@ -656,7 +1039,7 @@ int main(int argc, char *argv[]) {
   const double _ptforwarr_pp[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _raparr_abs[]       = {0.0, 1.2, 1.6};
   const double _rapforwarr_abs[]   = {1.6, 2.4};
-  const double _raparr_noabs[]     = {-1.6, -1.2, 0.0, 1.2, 1.6};
+  const double _raparr_noabs[]     = {-1.6, 0.0, 1.6};
   const double _rapforwarr_noabs[] = {-2.4, -1.6, 1.6, 2.4};
   const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0}; 
 //  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0};
@@ -710,9 +1093,20 @@ int main(int argc, char *argv[]) {
   string dirPath;
   char effHistname[1000], lxyTRHistname[1000];
   TFile *lxyTrueRecoFile;
-  TFile *effFileNominal, *effFileNominal_LowPt;
-  TFile *effFileNominalMinus, *effFileNominalMinus_LowPt;
+  TFile *effFileNominal, *effFileNominal_LowPt, *effFileNominal_ForwHighPt;
+  TFile *effFileNominalMinus, *effFileNominalMinus_LowPt, *effFileNominalMinus_ForwHighPt;
   TFile *output;
+
+  // Normal 3D efficiency files (without PR = NP, with PR = PR)
+  TFile *effFN1, *effFN2, *effFNMinus1, *effFNMinus2;
+  TFile *effFN_LowPt, *effFN_ForwHighPt, *effFNMinus_LowPt, *effFNMinus_ForwHighPt;
+  TFile *effFNPR1, *effFNPR2, *effFNPRMinus1, *effFNPRMinus2;
+  TFile *effFNPR_LowPt, *effFNPR_ForwHighPt, *effFNPRMinus_LowPt, *effFNPRMinus_ForwHighPt;
+  // eff*GEN 3D efficiency files (without PR = NP, with PR = PR)
+  TFile *cgenFN1, *cgenFN2, *cgenFNMinus1, *cgenFNMinus2;
+  TFile *cgenFN_LowPt, *cgenFN_ForwHighPt, *cgenFNMinus_LowPt, *cgenFNMinus_ForwHighPt;
+  TFile *cgenFNPR1, *cgenFNPR2, *cgenFNPRMinus1, *cgenFNPRMinus2;
+  TFile *cgenFNPR_LowPt, *cgenFNPR_ForwHighPt, *cgenFNPRMinus_LowPt, *cgenFNPRMinus_ForwHighPt;
 
   if (isPbPb) {
     dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEta_noTnPCorr";
@@ -720,51 +1114,299 @@ int main(int argc, char *argv[]) {
       output = new TFile("./FinalEfficiency_pbpb.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pbpb_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150827/lxyzTrueReco.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150923/lxyzTrueReco.root",dirPath.c_str());
   } else {
     dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pp.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pp_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150827/lxyzTrueReco.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150923/lxyzTrueReco.root",dirPath.c_str());
   }
   if (absRapidity) {
     sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
     cout << effHistname << endl;
     effFileNominal = new TFile(effHistname,"read");
     
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
     cout << effHistname << endl;
     effFileNominal_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
+    cout << effHistname << endl;
+    effFileNominal_ForwHighPt = new TFile(effHistname,"read");
+    
+    // 3D efficiency files
+    sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN1: " << effHistname << endl;
+    effFN1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN2: " << effHistname << endl;
+    effFN2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN_LowPt: " << effHistname << endl;
+    effFN_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN_ForwHighPt: " << effHistname << endl;
+    effFN_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR1: " << effHistname << endl;
+    effFNPR1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR2: " << effHistname << endl;
+    effFNPR2 = new TFile(effHistname,"read");
+
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR_LowPt: " << effHistname << endl;
+    effFNPR_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR_ForwHighPt: " << effHistname << endl;
+    effFNPR_ForwHighPt = new TFile(effHistname,"read");
+    
+    // 3D efficiency files (eff*gen)
+    sprintf(effHistname,"%s_closureTest/Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN1: " << effHistname << endl;
+    cgenFN1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN2: " << effHistname << endl;
+    cgenFN2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN_LowPt: " << effHistname << endl;
+    cgenFN_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN_ForwHighPt: " << effHistname << endl;
+    cgenFN_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR1: " << effHistname << endl;
+    cgenFNPR1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR2: " << effHistname << endl;
+    cgenFNPR2 = new TFile(effHistname,"read");
+
+    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR_LowPt: " << effHistname << endl;
+    cgenFNPR_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR_ForwHighPt: " << effHistname << endl;
+    cgenFNPR_ForwHighPt = new TFile(effHistname,"read");
   } else {
     sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
-    cout << effHistname << endl;
+    cout << "effFileNominal: " << effHistname << endl;
     effFileNominal = new TFile(effHistname,"read");
-    
+ 
     sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
-    cout << effHistname << endl;
+    cout << "effFileNominal_LowPt: " << effHistname << endl;
     effFileNominal_LowPt = new TFile(effHistname,"read");
     
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
+    cout << "effFileNominal_ForwHighPt: " <<  effHistname << endl;
+    effFileNominal_ForwHighPt = new TFile(effHistname,"read");
+    
     sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
-    cout << effHistname << endl;
+    cout << "effFileNominalMinus: " << effHistname << endl;
     effFileNominalMinus = new TFile(effHistname,"read");
     
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
-    cout << effHistname << endl;
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
+    cout << "effFileNominalMinus_LowPt:" << effHistname << endl;
     effFileNominalMinus_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
+    cout << "effFileNominalMinus_ForwHighPt: "<< effHistname << endl;
+    effFileNominalMinus_ForwHighPt = new TFile(effHistname,"read");
+ 
+    // 3D efficiency files
+    sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN1: "<< effHistname << endl;
+    effFN1 = new TFile(effHistname,"read");
+   
+    sprintf(effHistname,"%s/notAbs_Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN2: " << effHistname << endl;
+    effFN2 = new TFile(effHistname,"read");
+   
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN_LowPt: " << effHistname << endl;
+    effFN_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFN_ForwHighPt: "<< effHistname << endl;
+    effFN_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNMinus1: "<< effHistname << endl;
+    effFNMinus1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-1.6--1.2_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNMinus2: "<< effHistname << endl;
+    effFNMinus2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNMinus_LowPt: " << effHistname << endl;
+    effFNMinus_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNMinus_ForwHighPt : " << effHistname << endl;
+    effFNMinus_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR1: " << effHistname << endl;
+    effFNPR1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR2: " << effHistname << endl;
+    effFNPR2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR_LowPt: " << effHistname << endl;
+    effFNPR_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPR_ForwHighPt: " << effHistname << endl;
+    effFNPR_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPRMinus1 : " << effHistname << endl;
+    effFNPRMinus1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-1.6--1.2_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPRMinus2: " << effHistname << endl;
+    effFNPRMinus2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPRMinus_LowPt: " << effHistname << endl;
+    effFNPRMinus_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "effFNPRMinus_ForwHighPt : " << effHistname << endl;
+    effFNPRMinus_ForwHighPt = new TFile(effHistname,"read");
+
+    // 3D efficiency files (eff*gen)
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN1: "<< effHistname << endl;
+    cgenFN1 = new TFile(effHistname,"read");
+   
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN2: " << effHistname << endl;
+    cgenFN2 = new TFile(effHistname,"read");
+   
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN_LowPt: " << effHistname << endl;
+    cgenFN_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFN_ForwHighPt: " << effHistname << endl;
+    cgenFN_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6-0.0_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNMinus1: "<< effHistname << endl;
+    cgenFNMinus1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6--1.2_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNMinus2: "<< effHistname << endl;
+    cgenFNMinus2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNMinus_LowPt: " << effHistname << endl;
+    cgenFNMinus_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNMinus_ForwHighPt: " << effHistname << endl;
+    cgenFNMinus_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR1: "<< effHistname << endl;
+    cgenFNPR1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR2: "<< effHistname << endl;
+    cgenFNPR2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR_LowPt: "<< effHistname << endl;
+    cgenFNPR_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPR_ForwHighPt: "<< effHistname << endl;
+    cgenFNPR_ForwHighPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6-0.0_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPRMinus1: "<< effHistname << endl;
+    cgenFNPRMinus1 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6--1.2_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPRMinus2: "<< effHistname << endl;
+    cgenFNPRMinus2 = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPRMinus_LowPt: "<< effHistname << endl;
+    cgenFNPRMinus_LowPt = new TFile(effHistname,"read");
+    
+    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+    cout << "cgenFNPRMinus_ForwHighPt: "<< effHistname << endl;
+    cgenFNPRMinus_ForwHighPt = new TFile(effHistname,"read");
   }
   
   cout << lxyTRHistname << endl;
   lxyTrueRecoFile = new TFile(lxyTRHistname,"read");
        
   
-  if ( !effFileNominal->IsOpen() || !effFileNominal_LowPt->IsOpen() ||
+  if ( !effFileNominal->IsOpen() || !effFileNominal_LowPt->IsOpen() || !effFileNominal_ForwHighPt->IsOpen() ||
        !lxyTrueRecoFile->IsOpen() ||
        (!absRapidity && (!effFileNominalMinus->IsOpen() || !effFileNominalMinus_LowPt->IsOpen())) ) {
     cout << "CANNOT read efficiency root files. Exit." << endl;
     return -1;
   }
+
+  TFile *fileMidCT[8];
+  fileMidCT[0] = cgenFNPR1;
+  fileMidCT[1] = cgenFNPR2;
+  fileMidCT[2] = cgenFN1;
+  fileMidCT[3] = cgenFN2;
+  fileMidCT[4] = cgenFNPRMinus1;
+  fileMidCT[5] = cgenFNPRMinus2;
+  fileMidCT[6] = cgenFNMinus1;
+  fileMidCT[7] = cgenFNMinus2;
+
+  TFile *fileForwCT[8];
+  fileForwCT[0] = cgenFNPR_LowPt;
+  fileForwCT[1] = cgenFNPR_ForwHighPt;
+  fileForwCT[2] = cgenFN_LowPt;
+  fileForwCT[3] = cgenFN_ForwHighPt;
+  fileForwCT[4] = cgenFNPRMinus_LowPt;
+  fileForwCT[5] = cgenFNPRMinus_ForwHighPt;
+  fileForwCT[6] = cgenFNMinus_LowPt;
+  fileForwCT[7] = cgenFNMinus_ForwHighPt;
+
+  TFile *fileMid[8];
+  fileMid[0] = effFNPR1;
+  fileMid[1] = effFNPR2;
+  fileMid[2] = effFN1;
+  fileMid[3] = effFN2;
+  fileMid[4] = effFNPRMinus1;
+  fileMid[5] = effFNPRMinus2;
+  fileMid[6] = effFNMinus1;
+  fileMid[7] = effFNMinus2;
+
+  TFile *fileForw[8];
+  fileForw[0] = effFNPR_LowPt;
+  fileForw[1] = effFNPR_ForwHighPt;
+  fileForw[2] = effFN_LowPt;
+  fileForw[3] = effFN_ForwHighPt;
+  fileForw[4] = effFNPRMinus_LowPt;
+  fileForw[5] = effFNPRMinus_ForwHighPt;
+  fileForw[6] = effFNMinus_LowPt;
+  fileForw[7] = effFNMinus_ForwHighPt;
 
   TH1::SetDefaultSumw2();
 
@@ -796,6 +1438,7 @@ int main(int argc, char *argv[]) {
           ymin = TMath::Abs(raparr[a+1]);
           ymax = TMath::Abs(raparr[a]);
         }
+
         string fitname = Form("lxyzTrueReco_Rap%.1f-%.1f_Pt%.1f-%.1f_pfy",
                          ymin,ymax,ptarr[b],ptarr[b+1]);
         lxyTrueReco_pfy[nidx] = (TProfile*)lxyTrueRecoFile->Get(fitname.c_str());
@@ -835,16 +1478,21 @@ int main(int argc, char *argv[]) {
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         heffSimUnf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        if (raparr[a]==1.2 && raparr[a+1]==1.6 && ptarr[b]==16 && ptarr[b+1]==30 && centarr[c]==0 && centarr[c+1]==40) {
-          feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],4);
-        } else {
-          feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
-        }
+        if (isPbPb) {
+          if (raparr[a]==1.2 && raparr[a+1]==1.6 && ptarr[b]==16 && ptarr[b+1]==30 && centarr[c]==0 && centarr[c+1]==40) {
+            feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+          } else {
+            feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+          }
+        } else feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
 
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         heffProf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        if (isPbPb) 
+          feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],3);
+        else
+          feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
@@ -893,8 +1541,10 @@ int main(int argc, char *argv[]) {
         for (unsigned int d=0; d<nbinsctau; d++) {
           fitname = Form("hMeanLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_Lxy%.1f-%.1f",
                     rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1],ctauarr[d],ctauarr[d+1]);
-          if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0)) {
+          if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
+          } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+            hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
           } else {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
           }
@@ -903,8 +1553,10 @@ int main(int argc, char *argv[]) {
 
         fitname = Form("hEffLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0)) {
+        if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
+        } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+          heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
         } else {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
         }
@@ -1058,15 +1710,19 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        feffSimUnf[nidx]->SetParameters(0.5,4,8,0.2);
         if (isPbPb) {
+          feffSimUnf[nidx]->SetParameters(0.5,4,8,0.2);
           if (ymin==0.8 && ymax==1.6 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==8) {
             feffSimUnf[nidx]->SetParameters(0.23,1.35,0.55,0.33);
             feffSimUnf[nidx]->FixParameter(2,0.55);
           } else if (ymin==-1.6 && ymax==-1.2 && ptmin==11 && ptmax==13 && centmin==0 && centmax==40) {
             feffSimUnf[nidx]->SetParameters(0.07,2.21,0.11,0.49);
           }
-        } else { //pp
+        } else {
+          feffSimUnf[nidx]->SetParameters(1.1,0,0);
+        }
+
+/*        if (!isPbPb) { //pp
           if (( (ymin==-0.8 && ymax==0.0)||(ymin== 0.0 && ymax==0.8) ) && ptmin==11.0 && ptmax==13.0) {
                   //But this bin always fails because of its shape
                   feffSimUnf[nidx]->SetParameters(0.6,4,8,0.2);
@@ -1077,6 +1733,7 @@ int main(int argc, char *argv[]) {
               feffSimUnf[nidx]->SetParameters(0.02,0.95,0.61,0.49);
           }
         }
+*/
 
         TFitResultPtr res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"R S EX0");
         cout << feffSimUnf[nidx]->GetName() << endl;
@@ -1220,9 +1877,10 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        feffSimUnf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
         if (isPbPb) {
-          if (ymin==1.6 && ymax==2.4 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
+          feffSimUnf_LowPt[nidx]->SetParameters(1.1,0,0);
+/*          feffSimUnf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
+         if (ymin==1.6 && ymax==2.4 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
             feffSimUnf_LowPt[nidx]->SetParameters(0.08,0.98,0.43,0.08);
             feffSimUnf_LowPt[nidx]->FixParameter(2,0.43);
           } else if (ymin==1.6 && ymax==2.4 && ptmin==5.5 && ptmax==6.5 && centmin==0 && centmax==8) {
@@ -1239,8 +1897,9 @@ int main(int argc, char *argv[]) {
           } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
             feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.93,0.22,0.08);
             feffSimUnf_LowPt[nidx]->FixParameter(2,0.22);
-          }
+          }*/
         } else {
+          feffSimUnf_LowPt[nidx]->SetParameters(1.1,0,0);
         }
 
         TFitResultPtr res = geffSimUnf_LowPt[nidx]->Fit(Form("%s_TF",heffSimUnf_LowPt[nidx]->GetName()),"R S EX0 M");
@@ -1363,13 +2022,12 @@ int main(int argc, char *argv[]) {
           }
         }
 
-/*        if (isPbPb) {
-          if (ymin==0 && ymax==0.6 && ptmin==6.5 && ptmax==8.5)
+        if (isPbPb) {
+          feffProf[nidx]->SetParameters(0.5,4,8,0.2);
         } else {
+          feffProf[nidx]->SetParameters(1.1,0,0);
         }
-*/
 
-        feffProf[nidx]->SetParameters(0.5,4,8,0.2);
         TFitResultPtr res = geffProf[nidx]->Fit(Form("%s_TF",heffProf[nidx]->GetName()),"R S EX0");
         int counter=0;
         if (0 != res->Status()) {
@@ -1491,8 +2149,8 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        feffProf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
-        if (isPbPb) {
+        feffProf_LowPt[nidx]->SetParameters(1.1,0,0);
+/*        if (isPbPb) {
           if (ymin==0.0 && ymax==0.6 && ptmin==6.5 && ptmax==8.5) {
             //But this bin always fails because of its shape
             feffProf_LowPt[nidx]->SetParameters(0.12,1.48,0.42,0.15);
@@ -1502,9 +2160,7 @@ int main(int argc, char *argv[]) {
             //But this bin always fails because of its shape
             feffProf_LowPt[nidx]->SetParameters(0.17,1.35,0.62,0.19);
           }
-        } else {
-
-        }
+        }*/ 
 
         TFitResultPtr res = geffProf_LowPt[nidx]->Fit(Form("%s_TF",heffProf_LowPt[nidx]->GetName()),"R S EX0");
         int counter=0;
@@ -1616,10 +2272,10 @@ int main(int argc, char *argv[]) {
   SuperImposeRatio(heffProf, heffSimUnf, heffRatio, nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, isPbPb, absRapidity);
   SuperImposeRatio(heffProf_LowPt, heffSimUnf_LowPt, heffRatio_LowPt, nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, isPbPb, absRapidity);
 
-  LxyEff_3D(heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
-  LxyEff_3D(heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
-  LxyEff_3D(heffProf, "UseProfile", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
-  LxyEff_3D(heffProf_LowPt, "UseProfile", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
+  LxyEff_3D(output, fileMid, fileMidCT, heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
+  LxyEff_3D(output, fileForw, fileForwCT, heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
+  LxyEff_3D(output, fileMid, fileMidCT, heffProf, "UseProfile", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
+  LxyEff_3D(output, fileForw, fileForwCT, heffProf_LowPt, "UseProfile", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
 
   LxyEff_diff3D(geffSimUnf, heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, isPbPb, absRapidity);
   LxyEff_diff3D(geffSimUnf_LowPt, heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, isPbPb, absRapidity);
@@ -1629,3 +2285,8 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+
+
+
+
+

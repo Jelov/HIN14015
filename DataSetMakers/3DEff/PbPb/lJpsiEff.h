@@ -9,8 +9,13 @@
 #include <TH2D.h>
 #include <TH3D.h>
 #include <TF1.h>
+#include <TF2.h>
+#include <TF12.h>
+#include <TCutG.h>
+#include <TFormula.h>
 #include <TFitResult.h>
 #include <TGraphAsymmErrors.h>
+#include <TGraph2DErrors.h>
 #include <TFile.h>
 #include <TTree.h>
 #include <TCanvas.h>
@@ -19,6 +24,8 @@
 #include <TLatex.h>
 #include <TLegend.h>
 #include <TChain.h>
+#include <TPaveStats.h>
+#include <TPad.h>
 
 using namespace std;
 
@@ -26,8 +33,10 @@ using namespace std;
 static const bool use3DCtau = true;
 
 bool isForward(double ymin, double ymax) {
-  if (fabs(ymin)>=2.0 && fabs(ymax)<=2.4) return true;
-  else return false;
+  return false;
+//  if (ymin>=2.0 && ymax<=2.4) return true;
+//  else if (ymin>=-2.4 && ymax<=-2.0) return true;
+//  else return false;
 }
 
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
@@ -43,8 +52,36 @@ bool isMuonInAccept(const TLorentzVector *aMuon) {
          (1.5 <= fabs(aMuon->Eta()) && aMuon->Pt() >= 3.3667-7.0/9.0*fabs(aMuon->Eta()))));
 }
 
-double fitERF(double *x, double *par) {
+double fitErf(double *x, double *par) {
     return par[0]*TMath::Erf((x[0]-par[1])/par[2]);
+}
+
+double fitErf2D(double *x, double *par) {
+    double erf1 = par[0]*TMath::Erf((x[0]-par[1])/par[2]); // for rap
+    double erf2 = TMath::Erf((x[1]-par[3])/par[4]); // for pT
+    double result = erf1*erf2;
+    return result;
+}
+
+double fitErfPol2(double *x, double *par) {
+    double erf1 = par[0]*TMath::Erf((x[1]-par[3])/par[4]); // for pT
+    double pol2 = TMath::Power((x[0]-par[1])/par[2],2); // for rap
+    double result = erf1*pol2;
+    return result;
+}
+
+double fitErfPol1(double *x, double *par) {
+    double erf1 = TMath::Erf((x[1]-par[3])/par[4]); // for pT
+    double pol1 = (x[0]-par[0])/par[1]+par[2]; // for rap
+    double result = erf1*pol1;
+    return result;
+}
+
+double fitPol12D(double *x, double *par) {
+    double pol1 = (x[0]-par[0])/par[1]; // for rap
+    double pol2 = (x[1]-par[2])/par[3]; // for pT
+    double result = pol1*pol2;
+    return result;
 }
 
 double getAvgEffInRapPt(TH1D *h, double xmin, double xmax) {
@@ -73,7 +110,7 @@ double findCenWeight(const int Bin) {
   return(NCollArray[Bin]);
 }
 
-void getCorrectedEffErr(const int nbins, TH1 *hrec, TH1 *hgen, TH1 *heff) {
+void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
   for (int a=0; a<nbins; a++) {
     double genInt = hgen->GetBinContent(a+1);
     double genErr = hgen->GetBinError(a+1);
@@ -100,10 +137,47 @@ void getCorrectedEffErr(const int nbins, TH1 *hrec, TH1 *hgen, TH1 *heff) {
   }
 }
 
+void getCorrectedEffErr(const int nbinsy, const int nbinspt, TH2D *hrec, TH2D *hgen, TH2D *heff) {
+  for (int a=1; a<=nbinsy; a++) {
+    for (int b=1; b<=nbinspt; b++) {
+      int nbin = hgen->GetBin(a,b);
+      double genInt = hgen->GetBinContent(nbin);
+      double genErr = hgen->GetBinError(nbin);
+      double recInt = hrec->GetBinContent(nbin);
+      double recErr = hrec->GetBinError(nbin);
+      double eff = recInt / genInt;
+
+      double tmpErrGen1 = TMath::Power(eff,2) / TMath::Power(genInt,2);
+      double tmpErrRec1 = TMath::Power(recErr,2);
+      double tmpErr1 = tmpErrGen1 * tmpErrRec1;
+
+      double tmpErrGen2 = TMath::Power(1-eff,2) / TMath::Power(genInt,2);
+      double tmpErrRec2 = TMath::Abs(TMath::Power(genErr,2) - TMath::Power(recErr,2));
+      double tmpErr2 = tmpErrGen2 * tmpErrRec2;
+      double effErr = TMath::Sqrt(tmpErr1 + tmpErr2);
+
+      bool xlowpt =false, ylowpt=false;
+//      if (hgen->GetXaxis()->GetBinLowEdge(a) <1.6) xlowpt=true;
+//      if (hgen->GetYaxis()->GetBinLowEdge(b) <6.5) ylowpt=true;
+
+      if (genInt == 0) {
+        heff->SetBinContent(nbin, 0);
+        heff->SetBinError(nbin, 0);
+      } else if (xlowpt && ylowpt) {
+        heff->SetBinContent(nbin, 0);
+        heff->SetBinError(nbin, 0);
+      } else {
+        heff->SetBinContent(nbin, eff);
+        heff->SetBinError(nbin, effErr);
+      }
+    }
+  }
+}
 
 class Eff3DMC {
   private:
-    bool absRapidity, npmc, isPbPb;
+    bool absRapidity, npmc, isPbPb, doClosureTest;
+    int useTnPCorr;
 
     string inFileNames[100], className, outFileName;
     TFile *file, *inFile[100], *outfile, *fileSinMuW, *fileSinMuW_LowPt;
@@ -139,8 +213,19 @@ class Eff3DMC {
     int nbinspt3;
     double ptarray3[100];
 
+    // TnP scale factors
+    TF1 *gSingleMuW[2], *gSingleMuW_LowPt[2];
+    TF1 *gSingleMuWSTA, *gSingleMuWSTA_LowPt;
+
+    // Rap-Pt histo (integrated over all other variables) [centBins][rapBinsOnX-axis][pTBinsOnX-axis]
+    TH2D *h2DGenRapPtFit[10], *h2DRecRapPtFit[10], *h2DEffRapPtFit[10], *h2DMeanRapPtFit[10][20][20];
+    TF2 *f2DEffRapPtFit[10];
+    TGraph2D *g2DEffRapPtFit[100];
     // Rap histo (integrated over all other variables)
     TH1D *h1DGenRap, *h1DRecRap, *h1DEffRap;
+    TH1D *h1DGenRapFit[100], *h1DRecRapFit[100], *h1DEffRapFit[100], *h1DMeanRapFit[100][20];
+    TF1 *f1DEffRapFit[100];
+    TGraphAsymmErrors *g1DEffRapFit[100];
     // Pt histo (integrated over all other variables)
     TH1D *h1DGenPt, *h1DRecPt, *h1DEffPt;
     TH1D *h1DGenPtFit[100], *h1DRecPtFit[100], *h1DEffPtFit[100], *h1DMeanPtFit[100][20];
@@ -153,17 +238,17 @@ class Eff3DMC {
     TH1D *h1DGenDiMuMass, *h1DRecDiMuMass, *h1DGenCentrality, *h1DRecCentrality;
 
   public:
-    Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb);
-    Eff3DMC(string, string, string, bool, bool, bool);
+    Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb, int useTnP);
+    Eff3DMC(string, string, string, bool, bool, bool, int useTnP);
     ~Eff3DMC();
     int SetTree();
     void CreateHistos(const int _nbinsy, const double *yarray, const int _nbinsy2, const double *yarray2, const int _nbinspt, const double *ptarray, const int _nbinspt2, const double *ptarray2, const int _nbinscent, const int *centarray, const int _nbinscent2, const int *centarray2, const int _nbinsctau, const double *_ctauarray, const int _nbinsforwctau, const double *_ctauforwarray);
     void LoopTree(const double *yarray, const double *yarray2, const double *ptarray, const double *ptarray2, const int *centarray, const int *centarray2);
-    void GetEfficiency(const double *raparray2, const double *ptarray2, const int *centarray2);
+    void GetEfficiency(const double *yarray2, const double *ptarray2, const int *centarray2);
     void SaveHistos(string str, const int _nbinsy2, const double *yarray2);
 };
 
-Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb) {
+Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb, int _useTnP) {
   npmc = _npmc;
   nFiles = _nFiles;
   for (int i=0; i<nFiles; i++) {
@@ -182,13 +267,14 @@ Eff3DMC::Eff3DMC(int _nFiles, string str1[], string str2[], string str3, bool ab
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "nFiles: " << nFiles << endl;
-  
+  doClosureTest = 0;
+  useTnPCorr = _useTnP;
 //  fileSinMuW = new TFile(str1[nFiles-2].c_str(),"read");
 //  fileSinMuW_LowPt = new TFile(str1[nFiles-1].c_str(),"read");
 }
 
 
-Eff3DMC::Eff3DMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb) {
+Eff3DMC::Eff3DMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb, int _useTnP) {
   npmc = _npmc;
   nFiles = 1;
   inFileNames[0] = str1;
@@ -201,6 +287,7 @@ Eff3DMC::Eff3DMC(string str1, string str2, string str3, bool abs, bool _npmc, bo
   if (use3DCtau)
     cout << "inFileNamesLxyz: " << inFileNamesLxyz[0] << endl;
   cout << "nFiles: " << nFiles << endl;
+  useTnPCorr = _useTnP;
 }
 
 Eff3DMC::~Eff3DMC() {
@@ -229,6 +316,32 @@ Eff3DMC::~Eff3DMC() {
   delete h1DRecCentrality;
   delete h1DGenCentrality;
 
+  for (int c=0; c<nbinscent2-1; c++) {
+    int nidx = c;
+    delete h2DGenRapPtFit[nidx];
+    delete h2DRecRapPtFit[nidx];
+    delete h2DEffRapPtFit[nidx];
+    delete f2DEffRapPtFit[nidx];
+//    delete g2DEffRapPtFit[nidx];
+  }
+
+/*  // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+  for (int a=0; a<nbinsy2-1; a++) {
+    for (int b=0; b<nbinspt2-1; b++) {
+      for (int c=0; c<nbinscent2-1; c++) {
+        if (a == nbinsy2-2) {
+          for (int b=0; b<nbinspt3-1; b++) {
+            delete h2DMeanPtFit[c][a][b];
+          }
+        } else {
+          for (int b=0; b<nbinspt2-1; b++) {
+            delete h2DMeanPtFit[c][a][b];
+          }
+        }
+      }
+    }
+  }*/
+
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
       int nidx = a*(nbinscent2-1) + c;
@@ -250,6 +363,16 @@ Eff3DMC::~Eff3DMC() {
     }
   }
 
+  for (int b=0; b<nbinspt2-1; b++) {
+    for (int c=0; c<nbinscent2-1; c++) {
+      int nidx = b*(nbinscent2-1) + c;
+      delete h1DGenRapFit[nidx];
+      delete h1DRecRapFit[nidx];
+      delete h1DEffRapFit[nidx];
+      delete f1DEffRapFit[nidx];
+      delete g1DEffRapFit[nidx];
+    }
+  }
 
 }
 
@@ -439,6 +562,7 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
       Form("h1DEffCent_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
       ";Centrality",nbinscent-1,_centarray);
   
+  // Eff vs. pT in several y regions
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
       int nidx=a*(nbinscent2-1) + c;
@@ -446,7 +570,7 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
       double ymin=yarray2[a]; double ymax=yarray2[a+1];
       int centmin=centarray2[c]; int centmax=centarray2[c+1];
       
-      cout << "CreateHistos: nidx " <<  nidx << " " << a << " " << c << " " ;
+      cout << "CreateHistos (h1DGenPtFit): nidx " <<  nidx << " " << a << " " << c << " " ;
 
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
       int nbinspt2or3 = nbinspt2;
@@ -483,12 +607,88 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
           Form("h1DEffPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,_ptmin,_ptmax,centmin,centmax),
           ";p_{T} (GeV/c)",nbinspt2or3-1,ptarray2or3);
     
-      f1DEffPtFit[nidx] = new TF1(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),fitERF,_ptmin,_ptmax,3);
+      f1DEffPtFit[nidx] = new TF1(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),fitErf,_ptmin,_ptmax,3);
 
     }
   }
 
-  cout << "CreateHistos: " << h1DEffRap << " " << h1DEffPt << " " << h1DEffCent << endl;
+  // Eff vs. y in several pT regions
+  for (int b=0; b<nbinspt2-1; b++) {
+    for (int c=0; c<nbinscent2-1; c++) {
+      int nidx=b*(nbinscent2-1) + c;
+
+      double ptmin=ptarray2[b]; double ptmax=ptarray2[b+1];
+      int centmin=centarray2[c]; int centmax=centarray2[c+1];
+      
+      cout << "CreateHistos (h1DGenRapFit): nidx " <<  nidx << " " << b << " " << c << " " ;
+
+      for (int a=0; a<nbinsy2-1; a++) {
+        double ymin=yarray2[a]; double ymax=yarray2[a+1];
+        cout << a << " " ;
+
+        h1DMeanRapFit[nidx][a] = new TH1D(
+            Form("h1DMeanRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
+            ";Rapidity",(ymax-ymin)*100,ymin,ymax);
+        cout << h1DMeanRapFit[nidx][a] << endl;
+      }
+
+      h1DGenRapFit[nidx] = new TH1D(
+          Form("h1DGenRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,ptmin,ptmax,centmin,centmax),
+          ";Rapidity",nbinsy2-1,yarray2);
+      h1DRecRapFit[nidx] = new TH1D(
+          Form("h1DRecRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,ptmin,ptmax,centmin,centmax),
+          ";Rapidity",nbinsy2-1,yarray2);
+      h1DEffRapFit[nidx] = new TH1D(
+          Form("h1DEffRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,ptmin,ptmax,centmin,centmax),
+          ";Rapidity",nbinsy2-1,yarray2);
+    
+      f1DEffRapFit[nidx] = new TF1(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),fitErf,_ymin,_ymax,3);
+
+    }
+  }
+
+
+  // eff vs. pT and y maps
+  for (int c=0; c<nbinscent2-1; c++) {
+    int centmin=centarray2[c]; int centmax=centarray2[c+1];
+    int nidx=c;
+    
+    // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+    int nbinspt2or3 = nbinspt2;
+    double ptarray2or3[100] = {0};
+    if (isForward(_ymin,_ymax)) {
+      nbinspt2or3 = nbinspt3;
+      for (int b=0; b<nbinspt3; b++) {
+        ptarray2or3[b] = ptarray3[b];
+      }
+    } else {
+      nbinspt2or3 = nbinspt2;
+      for (int b=0; b<nbinspt2; b++) {
+        ptarray2or3[b] = ptarray2[b];
+      }
+    }
+    
+    cout << "CreateHistos (h2DGenRapPtFit): nidx " <<  nidx << " " << c << " " ;
+    h2DGenRapPtFit[nidx] = new TH2D(
+        Form("h2DGenRapPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
+        ";Rapidity;p_{T} (GeV/c)",nbinsy2-1,yarray2,nbinspt2or3-1,ptarray2or3);
+    h2DRecRapPtFit[nidx] = new TH2D(
+        Form("h2DRecRapPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
+        ";Rapidity;p_{T} (GeV/c)",nbinsy2-1,yarray2,nbinspt2or3-1,ptarray2or3);
+    h2DEffRapPtFit[nidx] = new TH2D(
+        Form("h2DEffRapPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
+        ";Rapidity;p_{T} (GeV/c)",nbinsy2-1,yarray2,nbinspt2or3-1,ptarray2or3);
+
+    const string fitErfPol12= "(((x-[0])/[1]+[2])*(y<6.5&&TMath::Abs(x)>=1.6) + ((x-[0])/[5]+[6])*(y>=6.5)) * TMath::Erf((y-[3])/[4])";
+//    f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitErfPol12.c_str(),_ymin,_ymax,_ptmin,_ptmax);
+    if (_ptmax<=6.5 && isPbPb) 
+      f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitPol12D,_ymin,_ymax,_ptmin,_ptmax,4);
+    else
+      f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitErfPol1,_ymin,_ymax,_ptmin,_ptmax,5);
+    cout << endl;
+  }
+
+  cout << "CreateHistos (h1DEffRap): " << h1DEffRap << " " << h1DEffPt << " " << h1DEffCent << endl;
 
 }
 
@@ -510,9 +710,9 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
   }
 
   ////// Single muon efficiency weighting (RD/MC)
-  string postfix[] = {"All"}; //, "0010", "1020", "2050", "50100"};
+/*  string postfix[] = {"1","2"}; //, "0010", "1020", "2050", "50100"};
   const int ngraph = sizeof(postfix)/sizeof(string);
-/*  TGraphAsymmErrors *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
+  TGraphAsymmErrors *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
   for (int i=0; i<ngraph; i++) {
     // Mid-rapidity region
     gSingleMuW[i] = (TGraphAsymmErrors*)fileSinMuW->Get(Form("Trg_pt_%s_Ratio",postfix[i].c_str()));
@@ -520,31 +720,27 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
     gSingleMuW_LowPt[i] = (TGraphAsymmErrors*)fileSinMuW_LowPt->Get(Form("Trg_pt_%s_Ratio",postfix[i].c_str()));
   }*/
 
-  TF1 *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
-  for (int i=0; i<ngraph; i++) {
-/*    // Divide correction regions in |y|
-    // Mid-rapidity region
-    gSingleMuW[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-        "[0]*TMath::Erf((x-[1])/[2])/TMath::Erf((x-[3])/[4])",0,50);
-    // Forward rapidity region
-    gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-        "[0]*TMath::Erf((x-[1])/[2])/TMath::Erf((x-[3])/[4])",0,50);
-    
-    gSingleMuW[i]->SetParameters(0.9967,1.371,2.034,1.488,2.191);
-    gSingleMuW_LowPt[i]->SetParameters(1.016,1.155,8.28,1.381,8.147);
-*/
-    // Divide correction regions in |eta|
-    // Mid-rapidity region
-    gSingleMuW[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
+  if (useTnPCorr==1) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor"),
     "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
-
-    // Forward rapidity region
-    gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-//    "(0.8299*TMath::Erf((x-1.2785)/1.8833))/(0.7810*TMath::Erf((x-1.3609)/2.1231))");
-//    "(0.8452*TMath::Erf((x-1.4262)/1.8845))/(0.7924*TMath::Erf((x-1.3808)/2.1061))");
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_LowPt"),
     "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
-    
+  } else if (useTnPCorr==2 || useTnPCorr==3) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor_Rap0.0-0.9"),
+    "(0.9646*TMath::Erf((x-0.1260)/3.5155))/(0.9724*TMath::Erf((x-0.4114)/3.3775))");
+    gSingleMuW[1] = new TF1(Form("TnP_ScaleFactor_Rap0.9-1.6"),
+    "(0.9725*TMath::Erf((x-1.0054)/2.3187))/(0.9502*TMath::Erf((x-1.3857)/2.0757))");
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_Rap1.6-2.1"),
+    "(0.9194*TMath::Erf((x-0.9733)/2.1374))/(0.8971*TMath::Erf((x-1.0984)/2.3510))");
+    gSingleMuW_LowPt[1] = new TF1(Form("TnP_ScaleFactor_Rap2.1-2.4"),
+    "(0.8079*TMath::Erf((x-0.9421)/0.8577))/(0.7763*TMath::Erf((x-0.8419)/1.6742))");
+
+    gSingleMuWSTA = new TF1(Form("TnP_ScaleFactor_STA"),
+    "(1.0000*TMath::Erf((x-1.3923)/2.3653))/(1.0000*TMath::Erf((x-1.5330)/2.8467))");
+    gSingleMuWSTA_LowPt = new TF1(Form("TnP_ScaleFactor_STA_LowPt"),
+    "(1.0000*TMath::Erf((x-0.0000)/2.5236))/(0.9523*TMath::Erf((x-0.7714)/2.0628))");
   }
+
   ////// End of single muon efficiency weighting (RD/MC)
 
   // Make a map from event list
@@ -574,7 +770,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         }
       } catch (const std::out_of_range& oor) {
         mapEvtList[evFull] = evLxyz;
-        cout << evFull << "\t" << evLxyz << endl;
+//        cout << evFull << "\t" << evLxyz << endl;
       }
     }
   } // End of making map for event list
@@ -641,13 +837,13 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
           for (int j=0; j<Reco_QQ_sizeLxyz; ++j) {
             TLorentzVector *JPLxyz = (TLorentzVector*)Reco_QQ_4momLxyz->At(j);
             if ((JPLxyz->M() == recoDiMu->M()) && (JPLxyz->Pt() == recoDiMu->Pt()) && (JPLxyz->Rapidity() == recoDiMu->Rapidity())) {
-                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << " ";
+//                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << " ";
                 double dp = recoDiMu->P();
                 dctau = Reco_QQ_ctauTrue3D[j]*10;
                 dctaureco = Reco_QQ_ctau3D[j];
                 dlxy = dctau*dp/3.096916;
                 dlxyreco = dctaureco*dp/3.096916;
-                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << endl;
+//                cout << dctau << " " << dctaureco << " " << dlxy << " " << dlxyreco << endl;
                 cout << "Apply Lxyz RECO!" << endl;
             }
           }
@@ -657,7 +853,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         // Get weighting factors
         double NcollWeight = findCenWeight(centrality);
         double singleMuWeight = 1;
-        int ig=0;
+//        int ig=0;
 //        if (centrality*2.5 >=0 && centrality*2.5 <10) ig=1;
 //        else if (centrality*2.5 >=10 && centrality*2.5 <20) ig=2;
 //        else if (centrality*2.5 >=20 && centrality*2.5 <50) ig=3;
@@ -684,6 +880,43 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
         }
 */
  
+        // Apply single muon tnp scale factors
+        if (useTnPCorr==1) {
+          if (TMath::Abs(recoMu1->Eta()) < 1.6) singleMuWeight = gSingleMuW[0]->Eval(recoMu1->Pt());
+          else singleMuWeight = gSingleMuW_LowPt[0]->Eval(recoMu1->Pt());
+
+          if (TMath::Abs(recoMu2->Eta()) < 1.6) singleMuWeight *= gSingleMuW[0]->Eval(recoMu2->Pt());
+          else singleMuWeight *= gSingleMuW_LowPt[0]->Eval(recoMu2->Pt());
+        } else if (useTnPCorr==2 || useTnPCorr==3) {
+          if (TMath::Abs(recoMu1->Eta()) < 0.9) {
+            singleMuWeight = gSingleMuW[0]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu1->Pt());
+          } else if (TMath::Abs(recoMu1->Eta()) >= 0.9 && TMath::Abs(recoMu1->Eta()) < 1.6) {
+            singleMuWeight = gSingleMuW[1]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu1->Pt());
+          } else if (TMath::Abs(recoMu1->Eta()) >= 1.6 && TMath::Abs(recoMu1->Eta()) < 2.1) {
+            singleMuWeight = gSingleMuW_LowPt[0]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu1->Pt());
+          } else {
+            singleMuWeight = gSingleMuW_LowPt[1]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu1->Pt());
+          }
+
+          if (TMath::Abs(recoMu2->Eta()) < 0.9) {
+            singleMuWeight *= gSingleMuW[0]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu2->Pt());
+          } else if (TMath::Abs(recoMu2->Eta()) >= 0.9 && TMath::Abs(recoMu2->Eta()) < 1.6) {
+            singleMuWeight *= gSingleMuW[1]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu2->Pt());
+          } else if (TMath::Abs(recoMu2->Eta()) >= 1.6 && TMath::Abs(recoMu2->Eta()) < 2.1) {
+            singleMuWeight *= gSingleMuW_LowPt[0]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu2->Pt());
+          } else {
+            singleMuWeight *= gSingleMuW_LowPt[1]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu2->Pt());
+          }
+        }
+          
         if (recoDiMu->M() >= 2.6 && recoDiMu->M()< 3.5) {
           if (isPbPb) {
             h1DRecDiMuMass->Fill(dm,weight*singleMuWeight*NcollWeight);
@@ -718,16 +951,41 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
           h1DRecCent->Fill(centrality*2.5,singleMuWeight);
         }
 
+        // 2D Rap-pT efficiency for fitting
+        for (int c=0; c<nbinscent2-1; c++) {
+          if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
+            if (absRapidity) {
+              if (isPbPb) {
+                h2DRecRapPtFit[c]->Fill(TMath::Abs(drap),dpt,weight*singleMuWeight*NcollWeight);
+              } else {
+                h2DRecRapPtFit[c]->Fill(TMath::Abs(drap),dpt,singleMuWeight);
+              }
+            } else {
+              if (isPbPb) {
+                h2DRecRapPtFit[c]->Fill(drap,dpt,weight*singleMuWeight*NcollWeight);
+              } else {
+                h2DRecRapPtFit[c]->Fill(drap,dpt,singleMuWeight);
+              }
+            }
+
+            /*if (isPbPb) {
+              h2DMeanRapPtFit[nidx][b]->Fill(dpt,weight*singleMuWeight*NcollWeight);
+            } else {
+              h2DMeanRapPtFit[nidx][b]->Fill(dpt,singleMuWeight);
+            }
+            */
+          }
+        }
+
         // 1D pT efficiency for fitting
         for (int a=0; a<nbinsy2-1; a++) {
+          if (absRapidity) {
+            if (!(TMath::Abs(drap) >= yarray2[a] && TMath::Abs(drap) < yarray2[a+1])) continue;
+          } else {
+            if (!(drap >= yarray2[a] && drap < yarray2[a+1])) continue;
+          }
           for (int c=0; c<nbinscent2-1; c++) {
             if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
-              if (absRapidity) {
-                if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
-              } else {
-                if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
-              }
-
               int nidx = a*(nbinscent2-1) + c;
               if (isPbPb) {
                 h1DRecPtFit[nidx]->Fill(dpt,weight*singleMuWeight*NcollWeight);
@@ -765,6 +1023,51 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
           }
         } // end of 1D pT efficiency for fitting
         
+        // 1D rap efficiency for fitting
+        for (int b=0; b<nbinspt2-1; b++) {
+          if (!(dpt >= ptarray2[b] && dpt < ptarray2[b+1])) continue;
+          for (int c=0; c<nbinscent2-1; c++) {
+            if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
+              int nidx = b*(nbinscent2-1) + c;
+
+              cout << "Eff3DMC::LoopTree() " << nidx << " " << b << " " << c << endl;
+              cout << "\t" << centrality << " " << dpt << " " << drap << endl;
+              cout << h1DRecRapFit[nidx] << endl;
+
+              if (isPbPb) {
+                if (absRapidity) 
+                  h1DRecRapFit[nidx]->Fill(TMath::Abs(drap),weight*singleMuWeight*NcollWeight);
+                else {
+                  h1DRecRapFit[nidx]->Fill(drap,weight*singleMuWeight*NcollWeight);
+                }
+              } else {
+                if (absRapidity) 
+                  h1DRecRapFit[nidx]->Fill(TMath::Abs(drap),singleMuWeight);
+                else
+                  h1DRecRapFit[nidx]->Fill(drap,singleMuWeight);
+              }
+
+              for (int a=0; a<nbinsy2-1; a++) {
+                if (yarray2[a] <= drap && yarray2[a+1] > drap) {
+//                  cout << "a: " << a << " " << yarray2[a] << endl;
+//                  cout << h1DMeanRapFit[nidx][a] << endl;
+                  if (isPbPb) {
+                    if (absRapidity) 
+                      h1DMeanRapFit[nidx][a]->Fill(TMath::Abs(drap),weight*singleMuWeight*NcollWeight);
+                    else
+                      h1DMeanRapFit[nidx][a]->Fill(drap,weight*singleMuWeight*NcollWeight);
+                  } else {
+                    if (absRapidity) 
+                      h1DMeanRapFit[nidx][a]->Fill(TMath::Abs(drap),singleMuWeight);
+                    else
+                      h1DMeanRapFit[nidx][a]->Fill(drap,singleMuWeight);
+                  }
+                }
+              } // end of meanRap[]
+            }
+          }
+        } // end of 1D rap efficiency for fitting
+        
       } // end of Reco_QQ_4mom condition test
     } // end of iRec loop
 
@@ -779,7 +1082,7 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
       double dlxy = dctau*dpt/3.096916;
 
       if ( isMuonInAccept(genMu1) && isMuonInAccept(genMu2) &&
-           genDiMu.M() > 2 && genDiMu.M()< 4 &&
+           genDiMu.M() > 2.95 && genDiMu.M()< 3.25 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] 
          ) {
         if (absRapidity) {
@@ -805,11 +1108,11 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
           for (int j=0; j<Gen_QQ_sizeLxyz; ++j) {
             TLorentzVector *JPLxyz = (TLorentzVector*)Gen_QQ_4momLxyz->At(j);
             if ( TMath::Abs(JPLxyz->M()-genDiMu.M())<JPLxyz->M()*1E-3 && TMath::Abs(JPLxyz->Pt()-genDiMu.Pt())<JPLxyz->Pt()*1E-3 && TMath::Abs(JPLxyz->Rapidity()-genDiMu.Rapidity())*1E-3) {
-                cout << dctau << " " << dlxy << " ";
+//                cout << dctau << " " << dlxy << " ";
                 double dp = genDiMu.P();
                 dctau = Gen_QQ_ctau3D[j] * 10;
                 dlxy = dctau*dp/3.096916;
-                cout << dctau << " " << dlxy << endl;
+//                cout << dctau << " " << dlxy << endl;
                 cout << "Apply Lxyz GEN!" << endl;
 //            } else {
 //              cout << "GEN skipped for " << j << " " << JPLxyz->M() << " " <<  genDiMu.M() << " " << JPLxyz->Pt() << " " << genDiMu.Pt() << " " << JPLxyz->Rapidity() << " " << genDiMu.Rapidity() << endl;
@@ -843,14 +1146,43 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
           h1DGenDiMuMass->Fill(genDiMu.M());
         }
 
+        if (doClosureTest && npmc && (dlxy > 0.3)) continue;
+
+        // 2D Rap-pT efficiency for fitting
+        for (int c=0; c<nbinscent2-1; c++) {
+          if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
+            if (absRapidity) {
+              if (isPbPb) {
+                h2DGenRapPtFit[c]->Fill(TMath::Abs(drap),dpt,weight*NcollWeight);
+              } else {
+                h2DGenRapPtFit[c]->Fill(TMath::Abs(drap),dpt);
+              }
+            } else {
+              if (isPbPb) {
+                h2DGenRapPtFit[c]->Fill(drap,dpt,weight*NcollWeight);
+              } else {
+                h2DGenRapPtFit[c]->Fill(drap,dpt);
+              }
+            }
+
+            /*if (isPbPb) {
+              h2DMeanRapPtFit[nidx][b]->Fill(dpt,weight*singleMuWeight*NcollWeight);
+            } else {
+              h2DMeanRapPtFit[nidx][b]->Fill(dpt,singleMuWeight);
+            }
+            */
+          }
+        }
+
+        // 1D pT efficiency for fitting
         for (int a=0; a<nbinsy2-1; a++) {
+          if (absRapidity) {
+            if (!(TMath::Abs(drap) >= yarray2[a] && TMath::Abs(drap) < yarray2[a+1])) continue;
+          } else {
+            if (!(drap >= yarray2[a] && drap < yarray2[a+1])) continue;
+          }
           for (int c=0; c<nbinscent2-1; c++) {
             if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
-              if (absRapidity) {
-                if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
-              } else {
-                if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
-              }
               int nidx = a*(nbinscent2-1) + c;
               if (isPbPb) {
                 h1DGenPtFit[nidx]->Fill(dpt,weight*NcollWeight);
@@ -859,7 +1191,29 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
               }
             }
           }
-        }
+        } // end of 1D pT eff for fitting
+        
+        // 1D rap efficiency for fitting
+        for (int b=0; b<nbinspt2-1; b++) {
+          if (!(dpt >= ptarray2[b] && dpt < ptarray2[b+1])) continue;
+          for (int c=0; c<nbinscent2-1; c++) {
+            if (centarray2[c] <= centrality && centarray2[c+1] > centrality) {
+              int nidx = b*(nbinscent2-1) + c;
+              if (isPbPb) {
+                if (absRapidity) 
+                  h1DGenRapFit[nidx]->Fill(TMath::Abs(drap),weight*NcollWeight);
+                else
+                  h1DGenRapFit[nidx]->Fill(drap,weight*NcollWeight);
+              } else {
+                if (absRapidity) 
+                  h1DGenRapFit[nidx]->Fill(TMath::Abs(drap));
+                else
+                  h1DGenRapFit[nidx]->Fill(drap);
+              }
+            }
+          }
+        } // end of 1D rap eff for fitting
+
 
       } // end of genDiMu condition test
     } // end of iGen loop
@@ -871,15 +1225,113 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
 
 
 
-void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, const int *centarray2) {
+void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const int *centarray2) {
   getCorrectedEffErr(nbinsy-1,h1DRecRap,h1DGenRap,h1DEffRap);
   getCorrectedEffErr(nbinspt-1,h1DRecPt,h1DGenPt,h1DEffPt);
   getCorrectedEffErr(nbinscent-1,h1DRecCent,h1DGenCent,h1DEffCent);
 
+  // 2D Rap-pT efficiency for fitting
+  for (int c=0; c<nbinscent2-1; c++) {
+    int nidx = c;
+    double _ymin = yarray2[0];
+    double _ymax = yarray2[nbinsy2-1];
+
+    cout << "GetEfficiency: " << nidx << " " << _ymin << " " << _ymax << endl;
+
+    // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
+    int nbinspt2or3 = nbinspt2;
+    double ptarray2or3[100] = {0};
+    if (isForward(_ymin,_ymax)) {
+      nbinspt2or3 = nbinspt3;
+      for (int b=0; b<nbinspt3; b++) {
+        ptarray2or3[b] = ptarray3[b];
+      }
+    } else {
+      nbinspt2or3 = nbinspt2;
+      for (int b=0; b<nbinspt2; b++) {
+        ptarray2or3[b] = ptarray2[b];
+      }
+    }
+
+    cout << "nbinsy2-1 " << nbinsy2-1 << " nbinspt2or3-1 " << nbinspt2or3-1 << " " << centarray2[c] << " " << centarray2[c+1] << endl;
+    cout << h2DRecRapPtFit[c] << " " << h2DGenRapPtFit[c] << " " << h2DEffRapPtFit[c] << endl;
+
+    getCorrectedEffErr(nbinsy2-1,nbinspt2or3-1,h2DRecRapPtFit[c],h2DGenRapPtFit[c],h2DEffRapPtFit[c]);
+
+/*
+    if (_ymin<=0 && _ymax<=0) {
+      f2DEffRapPtFit[nidx]->SetParameters(0.8,3,-2.5,2.5,-8);
+      if (_ymin==-2.4 && _ymax==-1.6 && centarray2[c]==0 && centarray2[c+1]==4)
+        f2DEffRapPtFit[nidx]->SetParameters(0.8,-3.8,-10,2.5,-5);
+    } else {
+      f2DEffRapPtFit[nidx]->SetParameters(0.8,3,2.5,2.5,-8);
+    }
+    if (_ymin<=0 && _ymax<=0) {
+      f2DEffRapPtFit[nidx]->SetParameters(0.8,2.5,-1.5,2.5,-8);
+    } else {
+      f2DEffRapPtFit[nidx]->SetParameters(0.8,2.5,1.5,2.5,-8);
+    }
+*/
+    if (isPbPb) {
+      if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
+        f2DEffRapPtFit[nidx]->SetParameters(1.4,3.6,-0.6,2.5,-10);
+      } else if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
+        f2DEffRapPtFit[nidx]->SetParameters(0,1,1.5,-6);
+//        f2DEffRapPtFit[nidx]->SetParameters(1.4,3.3,-0.6,1.5,-6);
+      } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
+        f2DEffRapPtFit[nidx]->SetParameters(1.4,-3.6,-0.6,2.5,-10);
+      } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
+        f2DEffRapPtFit[nidx]->SetParameters(0,-1,1.5,-6);
+//        f2DEffRapPtFit[nidx]->SetParameters(3.4,-4.3,-2.6,2.5,-60);
+      } else {
+        f2DEffRapPtFit[nidx]->SetParameters(0.8,0.5,1.0,2.5,-8,0,-0.6);
+      }    
+    } else {
+      if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
+        f2DEffRapPtFit[nidx]->SetParameters(1.7,3.3,-0.5,2.5,-6);
+      } else if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
+        f2DEffRapPtFit[nidx]->SetParameters(1,-1,-9,1.5,-3);
+//        f2DEffRapPtFit[nidx]->SetParameters(2.1,-3.2,0.6,1.5,-15);
+      } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
+        f2DEffRapPtFit[nidx]->SetParameters(1.7,-3.3,-0.5,2.5,-6);
+      } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
+        f2DEffRapPtFit[nidx]->SetParameters(2.1,3.2,0.6,1.5,-15);
+      } else {
+        f2DEffRapPtFit[nidx]->SetParameters(0.8,0.5,1.0,2.5,-8,0,-0.6);
+      }
+    }
+    if (fabs(_ymin)>=1.6 && fabs(_ymax)<=2.4){
+      if ((_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) ||
+          (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3)) {
+        if (isPbPb) {
+          f2DEffRapPtFit[nidx]->SetParLimits(0,-100,10);
+          f2DEffRapPtFit[nidx]->SetParLimits(1,-10,10);
+          f2DEffRapPtFit[nidx]->SetParLimits(2,-10,3);
+        }
+      } else f2DEffRapPtFit[nidx]->SetParLimits(3,-10,3);
+    } else {
+      f2DEffRapPtFit[nidx]->SetParLimits(3,-10,6.5);
+    }
+
+    cout << f2DEffRapPtFit[nidx]->GetName() << endl;
+
+    TFitResultPtr res = h2DEffRapPtFit[nidx]->Fit(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),"R L S");
+    int counter=0;
+    if (0 != res->Status()) {
+      while (1) {
+        counter++;
+        res = h2DEffRapPtFit[nidx]->Fit(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),"R L S");
+        if (0 == res->Status() || counter > 20) break;
+      }
+    }
+
+  }
+
+  // 1D pT efficiency for fitting
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
       int nidx = a*(nbinscent2-1) + c;
-      double ymin = raparray2[a]; double ymax = raparray2[a+1];
+      double ymin = yarray2[a]; double ymax = yarray2[a+1];
       int centmin = centarray2[c]; int centmax = centarray2[c+1];
 
       cout << nidx<< " " << a << " " << c << " " << ymin << " " << ymax << " " << centmin << " " << centmax << endl;
@@ -984,29 +1436,97 @@ void Eff3DMC::GetEfficiency(const double *raparray2, const double *ptarray2, con
           }
         }
       } else { // pp 
-        if (ymin==1.6 && ymax==2.0) {
-//          f1DEffPtFit[nidx]->SetParLimits(1,-10,3);
+        if (ymin==-0.8 && ymax==0.0) {
+          f1DEffPtFit[nidx]->SetParameters(0.73,5.61,4.22);
         }
         if (ymin==-2.4 && ymax==-2.0) {
-          f1DEffPtFit[nidx]->SetParameters(0.33,0.39,7.0);
+          f1DEffPtFit[nidx]->SetParameters(0.38,-0.42,6.4);
         } else if (ymin==2 && ymax==2.4) {
           f1DEffPtFit[nidx]->SetParameters(0.33,0.90,5.5);
+        } else if (ymin==2.1 && ymax==2.2) {
+          f1DEffPtFit[nidx]->SetParameters(0.32,1.14,5.61);
         }
       }
-      
-      TFitResultPtr res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R S");
+
+      TFitResultPtr res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R L S");
       int counter=0;
       if (0 != res->Status()) {
         while (1) {
           counter++;
-          res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R S");
+          res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R L S");
           if (0 == res->Status() || counter > 20) break;
         }
       }
      
 
     }
-  }
+  } // end of 1D pT eff fitting
+
+  // 1D rap efficiency for fitting
+  for (int b=0; b<nbinspt2-1; b++) {
+    for (int c=0; c<nbinscent2-1; c++) {
+      int nidx = b*(nbinscent2-1) + c;
+      double ptmin = ptarray2[b]; double ptmax = ptarray2[b+1];
+      int centmin = centarray2[c]; int centmax = centarray2[c+1];
+
+      cout << nidx<< " " << b << " " << c << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
+      cout <<  h1DEffRapFit[nidx] << " " << h1DRecRapFit[nidx] << " " << h1DGenRapFit[nidx] << endl;
+
+      getCorrectedEffErr(nbinsy2-1,h1DRecRapFit[nidx],h1DGenRapFit[nidx],h1DEffRapFit[nidx]);
+
+      // Move rap values of histograms to <rap>
+      cout << "\t\t" << h1DEffRapFit[nidx]->GetName() << endl;
+      g1DEffRapFit[nidx] = new TGraphAsymmErrors(h1DEffRapFit[nidx]);
+      g1DEffRapFit[nidx]->SetName(Form("%s_GASM",h1DEffRapFit[nidx]->GetName()));
+      g1DEffRapFit[nidx]->GetXaxis()->SetTitle("Rapidity");
+
+      for (int a=0; a<nbinsy2-1; a++) {
+        double gx, gy;
+        g1DEffRapFit[nidx]->GetPoint(a,gx,gy);
+
+        double meanrap, meanrap_xlerr, meanrap_xherr; 
+
+        meanrap = h1DMeanRapFit[nidx][a]->GetMean();
+
+        double ymin = yarray2[a]; double ymax = yarray2[a+1];
+        cout << "(a, nidx, gx, gy) : ("<< a << ", " << nidx << ", "
+             << gx << ", " << gy << ")" <<  endl;
+        cout << "ymin, ymax, meany : "<< ymin << ", " << ymax << ", " << meanrap << "" <<  endl;
+        
+        meanrap_xlerr = meanrap - ymin;
+        meanrap_xherr = ymax - meanrap;
+      
+        g1DEffRapFit[nidx]->SetPoint(a,meanrap,gy);
+        g1DEffRapFit[nidx]->SetPointEXlow(a,meanrap_xlerr);
+        g1DEffRapFit[nidx]->SetPointEXhigh(a,meanrap_xherr);
+      }
+      cout << endl;
+      // end of move rap values of histograms to <rap>
+
+      f1DEffRapFit[nidx]->SetParameters(0.5,4,8);
+      /*if (fabs(ymin)>=1.6 && fabs(ymax)<=2.4){
+        f1DEffRapFit[nidx]->SetParLimits(1,-10,3);
+      } else {
+        f1DEffRapFit[nidx]->SetParLimits(1,-10,6.5);
+      }*/
+
+
+
+      TFitResultPtr res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R L S"); // 0: Fit stored, but not drawn
+      int counter=0;
+      if (0 != res->Status()) {
+        while (1) {
+          counter++;
+          res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R L S");
+          if (0 == res->Status() || counter > 20) break;
+        }
+      }
+     
+
+    }
+  } // end of 1D rap eff fitting
+
+
 
 }
  
@@ -1029,6 +1549,17 @@ void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) 
   h1DRecCentrality->Write();
   h1DGenCentrality->Write();
 
+  for (int b=0; b<nbinspt2-1; b++) {
+    for (int c=0; c<nbinscent2-1; c++) {
+      int nidx = b*(nbinscent2-1) + c;
+      h1DGenRapFit[nidx]->Write();
+      h1DRecRapFit[nidx]->Write();
+      h1DEffRapFit[nidx]->Write();
+      f1DEffRapFit[nidx]->Write();
+      g1DEffRapFit[nidx]->Write();
+    }
+  }
+
   for (int a=0; a<nbinsy2-1; a++) {
     for (int c=0; c<nbinscent2-1; c++) {
       int nidx = a*(nbinscent2-1) + c;
@@ -1050,6 +1581,15 @@ void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) 
     }
   }
 
+  for (int c=0; c<nbinscent2-1; c++) {
+    int nidx = c;
+    h2DGenRapPtFit[nidx]->Write();
+    h2DRecRapPtFit[nidx]->Write();
+    h2DEffRapPtFit[nidx]->Write();
+    f2DEffRapPtFit[nidx]->Write();
+//    g2DEffRapPtFit[nidx]->Write();
+  }
+
   outfile->Close();
 }
 
@@ -1061,6 +1601,7 @@ void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) 
 class EffMC {
   private:
     bool absRapidity, npmc, isPbPb;
+    int useTnPCorr;
 
     string inFileNames[100], className, outFileName;
     TFile *file, *inFile[100], *outfile, *fileSinMuW, *fileSinMuW_LowPt;
@@ -1092,6 +1633,10 @@ class EffMC {
     TBranch *b_Reco_QQ_ctau3D, *b_Reco_QQ_ctauTrue3D, *b_Reco_QQ_ctauLxy, *b_Gen_QQ_ctau3D;
     TBranch *b_Reco_QQ_4momLxyz, *b_Gen_QQ_4momLxyz;
 
+    // TnP scale factors
+    TF1 *gSingleMuW[2], *gSingleMuW_LowPt[2];
+    TF1 *gSingleMuWSTA, *gSingleMuWSTA_LowPt;
+
     // Lxy histo
     TH3D *hGenLxy[20], *hRecLxy[20], *hEffLxy[20];
     TH1D *hGenLxyDiff[200], *hGenLxyRap[20], *hGenLxyPt[20], *hGenLxyCent[20], *hGenLxyA;
@@ -1109,8 +1654,8 @@ class EffMC {
     
 
   public:
-    EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb);
-    EffMC(string, string, string, bool, bool, bool);
+    EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool npmc, bool isPbPb, int useTnP);
+    EffMC(string, string, string, bool, bool, bool, int useTnP);
     ~EffMC();
     int SetTree();
     void CreateHistos(const int _nbinsy, const double *yarray, const int _nbinspt, const double *ptarray, const int _nbinscent, const int *centarray, const int _nbinsctau, const double *_ctauarray, const int _nbinsforwctau, const double *_ctauforwarray, const int _nbinsresol, const double _resolmin, const double _resolmax);
@@ -1119,7 +1664,7 @@ class EffMC {
     void SaveHistos(string str, const double *yarray, const double *ptarray, const int *centarray);
 };
 
-EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb) {
+EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb, int _useTnP) {
   npmc = _npmc;
   nFiles = _nFiles;
   for (int i=0; i<nFiles; i++) {
@@ -1135,13 +1680,14 @@ EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, b
   absRapidity = abs;
   isPbPb = _isPbPb;
   cout << "nFiles: " << nFiles << endl;
+  useTnPCorr = _useTnP;
   
 //  fileSinMuW = new TFile(str1[nFiles-2].c_str(),"read");
 //  fileSinMuW_LowPt = new TFile(str1[nFiles-1].c_str(),"read");
 }
 
 
-EffMC::EffMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb) {
+EffMC::EffMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _isPbPb, int _useTnP) {
   npmc = _npmc;
   nFiles = 1;
   inFileNames[0] = str1;
@@ -1154,6 +1700,7 @@ EffMC::EffMC(string str1, string str2, string str3, bool abs, bool _npmc, bool _
   if (use3DCtau) 
     cout << "inFileNamesLxyz: " << inFileNamesLxyz[0] << endl;
   cout << "nFiles: " << nFiles << endl;
+  useTnPCorr = _useTnP;
 }
 
 EffMC::~EffMC() {
@@ -1603,9 +2150,9 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
   }
 
   ////// Single muon efficiency weighting (RD/MC)
-  string postfix[] = {"All"}; //, "0010", "1020", "2050", "50100"};
+/*  string postfix[] = {"All"}; //, "0010", "1020", "2050", "50100"};
   const int ngraph = sizeof(postfix)/sizeof(string);
-/*  TGraphAsymmErrors *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
+  TGraphAsymmErrors *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
   for (int i=0; i<ngraph; i++) {
     // Mid-rapidity region
     gSingleMuW[i] = (TGraphAsymmErrors*)fileSinMuW->Get(Form("Trg_pt_%s_Ratio",postfix[i].c_str()));
@@ -1613,30 +2160,25 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
     gSingleMuW_LowPt[i] = (TGraphAsymmErrors*)fileSinMuW_LowPt->Get(Form("Trg_pt_%s_Ratio",postfix[i].c_str()));
   }*/
 
-  TF1 *gSingleMuW[ngraph], *gSingleMuW_LowPt[ngraph];
-  for (int i=0; i<ngraph; i++) {
-/*    // Divide correction regions in |y|
-    // Mid-rapidity region
-    gSingleMuW[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-        "[0]*TMath::Erf((x-[1])/[2])/TMath::Erf((x-[3])/[4])",0,50);
-    // Forward rapidity region
-    gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
-        "[0]*TMath::Erf((x-[1])/[2])/TMath::Erf((x-[3])/[4])",0,50);
-    
-    gSingleMuW[i]->SetParameters(0.9967,1.371,2.034,1.488,2.191);
-    gSingleMuW_LowPt[i]->SetParameters(1.016,1.155,8.28,1.381,8.147);
-*/
-
-    // Divide correction regions in |eta|
-    // Mid-rapidity region
-    gSingleMuW[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
+  if (useTnPCorr==1) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor"),
     "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
-
-    // Forward rapidity region
-    gSingleMuW_LowPt[i] = new TF1(Form("Trg_pt_%s_Ratio",postfix[i].c_str()),
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_LowPt"),
     "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
-//    "(0.8299*TMath::Erf((x-1.2785)/1.8833))/(0.7810*TMath::Erf((x-1.3609)/2.1231))");
+  } else if (useTnPCorr==2 || useTnPCorr==3) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor_Rap0.0-0.9"),
+    "(0.9646*TMath::Erf((x-0.1260)/3.5155))/(0.9724*TMath::Erf((x-0.4114)/3.3775))");
+    gSingleMuW[1] = new TF1(Form("TnP_ScaleFactor_Rap0.9-1.6"),
+    "(0.9725*TMath::Erf((x-1.0054)/2.3187))/(0.9502*TMath::Erf((x-1.3857)/2.0757))");
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_Rap1.6-2.1"),
+    "(0.9194*TMath::Erf((x-0.9733)/2.1374))/(0.8971*TMath::Erf((x-1.0984)/2.3510))");
+    gSingleMuW_LowPt[1] = new TF1(Form("TnP_ScaleFactor_Rap2.1-2.4"),
+    "(0.8079*TMath::Erf((x-0.9421)/0.8577))/(0.7763*TMath::Erf((x-0.8419)/1.6742))");
 
+    gSingleMuWSTA = new TF1(Form("TnP_ScaleFactor_STA"),
+    "(1.0000*TMath::Erf((x-1.3923)/2.3653))/(1.0000*TMath::Erf((x-1.5330)/2.8467))");
+    gSingleMuWSTA_LowPt = new TF1(Form("TnP_ScaleFactor_STA_LowPt"),
+    "(1.0000*TMath::Erf((x-0.0000)/2.5236))/(0.9523*TMath::Erf((x-0.7714)/2.0628))");
   }
   ////// End of single muon efficiency weighting (RD/MC)
 
@@ -1667,7 +2209,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
         }
       } catch (const std::out_of_range& oor) {
         mapEvtList[evFull] = evLxyz;
-        cout << evFull << "\t" << evLxyz << endl;
+//        cout << evFull << "\t" << evLxyz << endl;
       }
     }
   } // End of making map for event list
@@ -1775,8 +2317,51 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
           singleMuWeight *= gSingleMuW_LowPt[ig]->Eval(recoMu2->Pt());
         }
 */
+
+        // Apply single muon tnp scale factors
+        if (useTnPCorr==1) {
+          if (TMath::Abs(recoMu1->Eta()) < 1.6) singleMuWeight = gSingleMuW[0]->Eval(recoMu1->Pt());
+          else singleMuWeight = gSingleMuW_LowPt[0]->Eval(recoMu1->Pt());
+
+          if (TMath::Abs(recoMu2->Eta()) < 1.6) singleMuWeight *= gSingleMuW[0]->Eval(recoMu2->Pt());
+          else singleMuWeight *= gSingleMuW_LowPt[0]->Eval(recoMu2->Pt());
+        } else if (useTnPCorr==2 || useTnPCorr==3) {
+          if (TMath::Abs(recoMu1->Eta()) < 0.9) {
+            singleMuWeight = gSingleMuW[0]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu1->Pt());
+          } else if (TMath::Abs(recoMu1->Eta()) >= 0.9 && TMath::Abs(recoMu1->Eta()) < 1.6) {
+            singleMuWeight = gSingleMuW[1]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu1->Pt());
+          } else if (TMath::Abs(recoMu1->Eta()) >= 1.6 && TMath::Abs(recoMu1->Eta()) < 2.1) {
+            singleMuWeight = gSingleMuW_LowPt[0]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu1->Pt());
+          } else {
+            singleMuWeight = gSingleMuW_LowPt[1]->Eval(recoMu1->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu1->Pt());
+          }
+
+          if (TMath::Abs(recoMu2->Eta()) < 0.9) {
+            singleMuWeight *= gSingleMuW[0]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu2->Pt());
+          } else if (TMath::Abs(recoMu2->Eta()) >= 0.9 && TMath::Abs(recoMu2->Eta()) < 1.6) {
+            singleMuWeight *= gSingleMuW[1]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(recoMu2->Pt());
+          } else if (TMath::Abs(recoMu2->Eta()) >= 1.6 && TMath::Abs(recoMu2->Eta()) < 2.1) {
+            singleMuWeight *= gSingleMuW_LowPt[0]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu2->Pt());
+          } else {
+            singleMuWeight *= gSingleMuW_LowPt[1]->Eval(recoMu2->Pt());
+            if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(recoMu2->Pt());
+          }
+        }
+
         // Differential histograms & Apply weights
         for (int a=0; a<nbinsy-1; a++) {
+          if (absRapidity) {
+            if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
+          } else {
+            if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
+          }
           for (int b=0; b<nbinspt-1; b++) {
             for (int c=0; c<nbinscent-1; c++) {
               int nidx = a*(nbinspt-1)*(nbinscent-1) + b*(nbinscent-1) + c;
@@ -1792,12 +2377,6 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
               if ( (ptarray[b] <= dpt && ptarray[b+1] > dpt) &&
                    (centarray[c] <= centrality && centarray[c+1] > centrality)
                  ) {
-
-                if (absRapidity) {
-                  if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
-                } else {
-                  if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
-                }
 
                 if (!npmc && (dlxy > 0.1 || dctau > 0.1)) continue;
                 
@@ -1915,7 +2494,7 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
       double dlxy = dctau*dpt/3.096916;
 
       if ( isMuonInAccept(genMu1) && isMuonInAccept(genMu2) &&
-           genDiMu.M() > 2 && genDiMu.M()< 4 &&
+           genDiMu.M() > 2.95 && genDiMu.M()< 3.25 &&
            dpt >= ptarray[0] && dpt <= ptarray[nbinspt-1] 
          ) {
         if (absRapidity) {
@@ -1956,17 +2535,17 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
         double NcollWeight = findCenWeight(centrality);
         // Differential histograms
         for (int a=0; a<nbinsy-1; a++) {
+          if (absRapidity) {
+            if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
+          } else {
+            if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
+          }
           for (int b=0; b<nbinspt-1; b++) {
             for (int c=0; c<nbinscent-1; c++) {
               int nidx = a*(nbinspt-1)*(nbinscent-1) + b*(nbinscent-1) + c;
               if ( (ptarray[b] <= dpt && ptarray[b+1] > dpt) &&
                    (centarray[c] <= centrality && centarray[c+1] > centrality)
                  ) {
-                if (absRapidity) {
-                  if (!(TMath::Abs(drap) >= yarray[a] && TMath::Abs(drap) < yarray[a+1])) continue;
-                } else {
-                  if (!(drap >= yarray[a] && drap < yarray[a+1])) continue;
-                }
                 if (!npmc && (dlxy > 0.1 || dctau > 0.1)) continue;
                 if (isPbPb) {
                   hGenDiff[nidx]->Fill(dctau,weight*NcollWeight);
@@ -2283,6 +2862,13 @@ void SetHistStyle(TH1 *h, int i, int j, double rmin, double rmax){
   h->SetMarkerColor(colorArr[i]);
   h->SetLineColor(colorArr[i]);
   h->SetMarkerStyle(markerArr[j]);
+
+  h->SetTitleSize(0.048,"XYZ");
+  h->SetLabelSize(0.048,"XYZ");
+}
+
+void SetHistStyle(TH2 *h, double rmin, double rmax){
+  h->GetZaxis()->SetRangeUser(rmin,rmax);
 
   h->SetTitleSize(0.048,"XYZ");
   h->SetLabelSize(0.048,"XYZ");

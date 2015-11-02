@@ -12,6 +12,7 @@
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TF1.h"
+#include "TF2.h"
 #include "TFitResult.h"
 #include "TLorentzVector.h"
 #include "TRandom3.h"
@@ -57,11 +58,24 @@ static int runType = 0;
 //0 : DO NOT weight, 1: Apply weight
 static bool doWeighting = false;
 
+/////// These are not input arguments
 //0 : use Lxy/ctau for lifetime, 1: use Lxyz/ctau3D for lifetime
 static bool use3DCtau = true;
 
-//0 : not apply tnp correction factor, 1: apply tnp correction factor
-static bool useTnPCorr = true;
+//0 : not apply tnp correction factor, 1: apply tnp correction factor(old)
+//2: apply tnp correction factor(new: STA * (muID+trig) )
+//3: apply tnp correction factor(new: muID+trig)
+static int useTnPCorr = 3;
+
+//0 : not apply Lxyz efficiency, 1: apply Lxyz efficiency
+static bool useLxyzCorr = true;
+
+//0: not use y-pT efficiency map, 1: use y-pT efficiency map, 2: use y-pT eff map only in forward region
+static int useRapPtEff = 2;
+
+//0: apply ratio for 3D and 4D eff, 1: apply difference for 3D and 4D eff
+static bool useEffDiff = true;
+/////// End of non-input-arguments
 
 //0: don't care about RPAng, 1: Pick events with RPAng != -10
 static bool checkRPNUM = false;
@@ -110,7 +124,7 @@ const int _centarr[] = {0, 40};
 const int _centforwarr[] = {0, 40};
 const double _ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
 const double _ptforwarr[] = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-const double _raparr[] = {-1.6, -1.2, 0.0, 1.2, 1.6};
+const double _raparr[] = {-1.6, 0.0, 1.6};
 const double _rapforwarr[] = {-2.4, -1.6, 1.6, 2.4};
 const unsigned int _nCentArr = sizeof(_centarr)/sizeof(int) -1;
 const unsigned int _nCentForwArr = sizeof(_centforwarr)/sizeof(int) -1;
@@ -121,14 +135,15 @@ const unsigned int _nRapForwArr = sizeof(_rapforwarr)/sizeof(double) -1;
 const unsigned int _nHistEff = _nCentArr * _nPtArr * _nRapArr;
 const unsigned int _nHistForwEff = _nCentForwArr * _nPtForwArr * _nRapForwArr;
 
-TF1 *feffPt[nRapArr * nCentArr], *feffPt_LowPt[nRapArr * nCentArr];
-TF1 *feffLxy[_nHistEff], *feffLxy_LowPt[_nHistForwEff];
-TH1D *heffLxy[_nHistEff], *heffLxy_LowPt[_nHistForwEff];
+TF1 *feffPt[nRapArr * nCentArr], *feffPt_LowPt[nRapArr * nCentArr], *feffPt_ForwHighPt[nRapArr * nCentArr];
+TF2 *feffRapPt[2*nCentArr], *feffRapPt_LowPt[2*nCentArr], *feffRapPt_ForwHighPt[2*nCentArr];
+TF1 *feffLxy[_nHistEff], *feffLxy_LowPt[_nHistEff];
+TH1D *heffLxy[_nHistEff], *heffLxy_LowPt[_nHistEff];
 TH1D *heffEmpty[nRapArr * nCentArr], *heffEmpty_LowPt[nRapArr * nCentArr];
-TH1D *heffCentCow[nHistEff], *heffCentCow_LowPt[nHistForwEff];
-TH1D *heffCentSai[nHistEff], *heffCentSai_LowPt[nHistForwEff];
+TH1D *heffCentCow[nHistEff], *heffCentCow_LowPt[nHistEff];
+TH1D *heffCentSai[nHistEff], *heffCentSai_LowPt[nHistEff];
 
-TH2D *hLxyCtau[nHistEff], *hLxyCtau_LowPt[nHistForwEff];
+TH2D *hLxyCtau[nHistEff], *hLxyCtau_LowPt[nHistEff];
 TH2D *hLxyCtau2[10];
 
 // Variables for a dimuon
@@ -148,7 +163,9 @@ struct Condition {
 bool checkTriggers(const struct Condition Jpsi, bool cowboy, bool sailor);
 bool checkRunType(const struct Condition Jpsi, const TLorentzVector* m1P, const TLorentzVector* m2P, double var);
 bool isAccept(const TLorentzVector* aMuon);
+bool isMuonInAccept(const TLorentzVector *aMuon);
 double reducedPhi(double thedPhi);
+
 
 double fitERF(double *x, double *par) {
   return par[0]*TMath::Erf((x[0]-par[1])/par[2]);
@@ -247,10 +264,13 @@ int main(int argc, char* argv[]) {
 
   // Settings for Lxyz information imports to normal onia tree
   TFile *fileLxyz;
-  if (isPbPb) fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2011PbPb/Jpsi_Histos_3Mu_v2.root");
-  else fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_GlbGlb_Jpsi_Histos_3Mu_v1.root");
+  TTree *TreeLxyz;
+  if (use3DCtau) {
+    if (isPbPb) fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2011PbPb/Jpsi_Histos_3Mu_v2.root");
+    else fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_GlbGlb_Jpsi_Histos_3Mu_v1.root");
 
-  TTree *TreeLxyz=(TTree*)fileLxyz->Get("myTree");
+    TreeLxyz = (TTree*)fileLxyz->Get("myTree");
+  }
 
   unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
   Int_t Reco_QQ_sizeLxyz;
@@ -280,8 +300,8 @@ int main(int argc, char* argv[]) {
 
   // Settings for efficiency weighting
   TFile *effFileLxy;
-  TFile *effFilepT, *effFilepT_LowPt;
-  TFile *effFilepT_Minus, *effFilepT_Minus_LowPt;
+  TFile *effFilepT, *effFilepT_LowPt, *effFilepT_ForwHighPt;
+  TFile *effFilepT_Minus, *effFilepT_Minus_LowPt, *effFilepT_Minus_ForwHighPt;
   TFile *effFileCowboy, *effFileCowboy_LowPt;
   TFile *effFileSailor, *effFileSailor_LowPt;
 
@@ -306,25 +326,57 @@ int main(int argc, char* argv[]) {
 
   // Forward region + including low pT bins
   for (unsigned int a=0; a<_nRapForwArr; a++) {
+    if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
     for (unsigned int b=0; b<_nPtForwArr; b++) {
-      for (unsigned int c=0; c<_nCentForwArr; c++) {
-        if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
-        unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
-        double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
-        double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
-        double centmin=_centforwarr[c]; double centmax=_centforwarr[c+1];
+      if (_ptforwarr[b]<=6.5 && _ptforwarr[b+1]<=6.5) {
+        for (unsigned int c=0; c<_nCentForwArr; c++) {
+          unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
+          double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
+          double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
+          double centmin=_centforwarr[c]; double centmax=_centforwarr[c+1];
 
-        hLxyCtau_LowPt[nidx] = new TH2D(Form("hLxyCtau_Data_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1])
-              ,";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+          hLxyCtau_LowPt[nidx] = new TH2D(Form("hLxyCtau_Data_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1])
+                ,";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+        }
+      } else {
+        for (unsigned int c=0; c<_nCentArr; c++) {
+          unsigned int nidx = a*_nPtForwArr*_nCentArr + b*_nCentArr + c;
+          double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
+          double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
+          double centmin=_centarr[c]; double centmax=_centarr[c+1];
+
+          hLxyCtau_LowPt[nidx] = new TH2D(Form("hLxyCtau_Data_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centarr[c],_centarr[c+1])
+                ,";Lxy(Reco) (mm);ctau (mm)",12,0,3,12,0,3);
+        }
       }
     }
   }
     
-  // To be used with useTnPCorr option
-  TF1 *gSingleMuW = new TF1(Form("TnP_ScaleFactor"),
-  "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
-  TF1 *gSingleMuW_LowPt = new TF1(Form("TnP_ScaleFactor_LowPt"),
-  "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
+  // To be used with useTnPCorr option (old uses [0] only)
+  TF1 *gSingleMuW[2];
+  TF1 *gSingleMuW_LowPt[2];
+  TF1 *gSingleMuWSTA;
+  TF1 *gSingleMuWSTA_LowPt;
+  if (useTnPCorr==1) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor"),
+    "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_LowPt"),
+    "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
+  } else if (useTnPCorr==2 || useTnPCorr==3) {
+    gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor_Rap0.0-0.9"),
+    "(0.9646*TMath::Erf((x-0.1260)/3.5155))/(0.9724*TMath::Erf((x-0.4114)/3.3775))");
+    gSingleMuW[1] = new TF1(Form("TnP_ScaleFactor_Rap0.9-1.6"),
+    "(0.9725*TMath::Erf((x-1.0054)/2.3187))/(0.9502*TMath::Erf((x-1.3857)/2.0757))");
+    gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_Rap1.6-2.1"),
+    "(0.9194*TMath::Erf((x-0.9733)/2.1374))/(0.8971*TMath::Erf((x-1.0984)/2.3510))");
+    gSingleMuW_LowPt[1] = new TF1(Form("TnP_ScaleFactor_Rap2.1-2.4"),
+    "(0.8079*TMath::Erf((x-0.9421)/0.8577))/(0.7763*TMath::Erf((x-0.8419)/1.6742))");
+
+    gSingleMuWSTA = new TF1(Form("TnP_ScaleFactor_STA"),
+    "(1.0000*TMath::Erf((x-1.3923)/2.3653))/(1.0000*TMath::Erf((x-1.5330)/2.8467))");
+    gSingleMuWSTA_LowPt = new TF1(Form("TnP_ScaleFactor_STA_LowPt"),
+    "(1.0000*TMath::Erf((x-0.0000)/2.5236))/(0.9523*TMath::Erf((x-0.7714)/2.0628))");
+  }
 
   if (doWeighting) {
     // 4D efficiency files
@@ -369,21 +421,29 @@ int main(int argc, char* argv[]) {
       cout << effHistname << endl;
       effFilepT = new TFile(effHistname);
       
-      sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+      sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
       cout << effHistname << endl;
       effFilepT_LowPt = new TFile(effHistname);
       
+      sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+      cout << effHistname << endl;
+      effFilepT_ForwHighPt = new TFile(effHistname);
+
       sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
       cout << effHistname << endl;
       effFilepT_Minus = new TFile(effHistname);
       
-      sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+      sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
       cout << effHistname << endl;
       effFilepT_Minus_LowPt = new TFile(effHistname);
       
+      sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
+      cout << effHistname << endl;
+      effFilepT_Minus_ForwHighPt = new TFile(effHistname);
+
       if (!effFileLxy->IsOpen() ||
-          !effFilepT->IsOpen() || !effFilepT_LowPt->IsOpen() ||
-          !effFilepT_Minus->IsOpen() || !effFilepT_Minus_LowPt->IsOpen()
+          !effFilepT->IsOpen() || !effFilepT_LowPt->IsOpen() || !effFilepT_ForwHighPt->IsOpen() ||
+          !effFilepT_Minus->IsOpen() || !effFilepT_Minus_LowPt->IsOpen() || !effFilepT_Minus_ForwHighPt->IsOpen()
          ) {
         cout << "CANNOT read efficiency root files. Exit." << endl;
         return -4;
@@ -398,7 +458,7 @@ int main(int argc, char* argv[]) {
         for (unsigned int c=0; c<nCentArr; c++) {
           unsigned int nidx = a*nCentArr + c;
           if (raparr[a]==-1.6 && raparr[a+1]==1.6) continue;
-          
+
           string fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_TF",raparr[a],raparr[a+1],centarr[c],centarr[c+1]);
           feffPt[nidx] = (TF1*)effFilepT->Get(fitname.c_str());
           if (!feffPt[nidx]) feffPt[nidx] = (TF1*)effFilepT_Minus->Get(fitname.c_str());
@@ -408,6 +468,22 @@ int main(int argc, char* argv[]) {
           heffEmpty[nidx] = new TH1D(fitname.c_str(),"#varepsilon #leq 0;p_{T} (GeV/c);Counts",14,2.0,30.0);
         }
       }
+
+      // 2D rap-pt efficiency fit function
+      for (unsigned int c=0; c<nCentArr; c++) {
+        string fitname = Form("h2DEffRapPt_PRJpsi_Rap-1.6-0.0_Pt6.5-30.0_Cent%d-%d_TF",centarr[c],centarr[c+1]);
+        feffRapPt[c] = (TF2*)effFilepT->Get(fitname.c_str());
+        if (!feffRapPt[c]) feffRapPt[c] = (TF2*)effFilepT_Minus->Get(fitname.c_str());
+        cout << feffRapPt[c]->GetName() << endl;
+      }
+      for (unsigned int c=0; c<nCentArr; c++) {
+        string fitname = Form("h2DEffRapPt_PRJpsi_Rap0.0-1.6_Pt6.5-30.0_Cent%d-%d_TF",centarr[c],centarr[c+1]);
+        feffRapPt[c+nCentArr] = (TF2*)effFilepT->Get(fitname.c_str());
+        if (!feffRapPt[c+nCentArr]) feffRapPt[c+nCentArr] = (TF2*)effFilepT_Minus->Get(fitname.c_str());
+        cout << feffRapPt[c+nCentArr]->GetName() << endl;
+      }
+        
+
 
       if (isPbPb || !isPbPb) {
         for (unsigned int a=0; a<_nRapArr; a++) {
@@ -442,166 +518,122 @@ int main(int argc, char* argv[]) {
     
       // Forward region + including low pT bins
       for (unsigned int a=0; a<nRapForwArr; a++) {
+        if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
         for (unsigned int c=0; c<nCentForwArr; c++) {
-          if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
           unsigned int nidx = a*nCentForwArr + c;
-          
-          string fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt3.0-30.0_Cent%d-%d_TF",rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
+
+          string fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt3.0-6.5_Cent%d-%d_TF",rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
           feffPt_LowPt[nidx] = (TF1*)effFilepT_LowPt->Get(fitname.c_str());
           if (!feffPt_LowPt[nidx]) feffPt_LowPt[nidx] = (TF1*)effFilepT_Minus_LowPt->Get(fitname.c_str());
           cout << "\t" << nidx << " " << fitname << " " << feffPt_LowPt[nidx] << endl;
-          
-          fitname = Form("h1DEmptyPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d",rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
-          heffEmpty_LowPt[nidx] = new TH1D(fitname.c_str(),"#varepsilon #leq 0;p_{T} (GeV/c);Counts",14,2.0,30.0);
-
         }
+        
+        for (unsigned int c=0; c<nCentArr; c++) {
+          if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
+          unsigned int nidx = a*nCentArr + c;
+          
+          string fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_TF",rapforwarr[a],rapforwarr[a+1],centarr[c],centarr[c+1]);
+          feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_ForwHighPt->Get(fitname.c_str());
+          if (!feffPt_ForwHighPt[nidx]) feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
+          cout << "\t" << nidx << " " << fitname << " " << feffPt_ForwHighPt[nidx] << endl;
+
+          fitname = Form("h1DEmptyPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d",rapforwarr[a],rapforwarr[a+1],centarr[c],centarr[c+1]);
+          heffEmpty_LowPt[nidx] = new TH1D(fitname.c_str(),"#varepsilon #leq 0;p_{T} (GeV/c);Counts",14,2.0,30.0);
+        }
+
       }
+
+      // 2D rap-pt efficiency fit function
+      for (unsigned int c=0; c<nCentForwArr; c++) {
+        string fitname = Form("h2DEffRapPt_PRJpsi_Rap-2.4--1.6_Pt3.0-6.5_Cent%d-%d_TF",centforwarr[c],centforwarr[c+1]);
+        feffRapPt_LowPt[c] = (TF2*)effFilepT_LowPt->Get(fitname.c_str());
+        if (!feffRapPt_LowPt[c]) feffRapPt_LowPt[c] = (TF2*)effFilepT_Minus_LowPt->Get(fitname.c_str());
+        cout << feffRapPt_LowPt[c]->GetName() << endl;
+
+        fitname = Form("h2DEffRapPt_PRJpsi_Rap1.6-2.4_Pt3.0-6.5_Cent%d-%d_TF",centforwarr[c],centforwarr[c+1]);
+        feffRapPt_LowPt[c+nCentForwArr] = (TF2*)effFilepT_LowPt->Get(fitname.c_str());
+        if (!feffRapPt_LowPt[c+nCentForwArr]) feffRapPt_LowPt[c+nCentForwArr] = (TF2*)effFilepT_Minus_LowPt->Get(fitname.c_str());
+        cout << feffRapPt_LowPt[c+nCentForwArr]->GetName() << endl;
+      }
+      for (unsigned int c=0; c<nCentArr; c++) {
+        string fitname = Form("h2DEffRapPt_PRJpsi_Rap1.6-2.4_Pt6.5-30.0_Cent%d-%d_TF",centarr[c],centarr[c+1]);
+        feffRapPt_ForwHighPt[c+nCentArr] = (TF2*)effFilepT_ForwHighPt->Get(fitname.c_str());
+        if (!feffRapPt_ForwHighPt[c+nCentArr]) feffRapPt_ForwHighPt[c+nCentArr] = (TF2*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
+        cout << feffRapPt_ForwHighPt[c+nCentArr]->GetName() << endl;
+
+        fitname = Form("h2DEffRapPt_PRJpsi_Rap-2.4--1.6_Pt6.5-30.0_Cent%d-%d_TF",centarr[c],centarr[c+1]);
+        feffRapPt_ForwHighPt[c] = (TF2*)effFilepT_ForwHighPt->Get(fitname.c_str());
+        if (!feffRapPt_ForwHighPt[c]) feffRapPt_ForwHighPt[c] = (TF2*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
+        cout << feffRapPt_ForwHighPt[c]->GetName() << endl;
+      }
+
+
+
 
       if (isPbPb || !isPbPb) {
         for (unsigned int a=0; a<_nRapForwArr; a++) {
+          if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
           for (unsigned int b=0; b<_nPtForwArr; b++) {
-            for (unsigned int c=0; c<_nCentForwArr; c++) {
-              if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
-              unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
-              double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
-              double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
-              double centmin=_centforwarr[c]; double centmax=_centforwarr[c+1];
-              
-              string fitname;
-              if (!effWeight.compare("profile")) {
-                fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-                heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
-                cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
+            if (_ptforwarr[b]<=6.5 && _ptforwarr[b+1]<=6.5) {
+              for (unsigned int c=0; c<_nCentForwArr; c++) {
+                unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
+                double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
+                double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
+                double centmin=_centforwarr[c]; double centmax=_centforwarr[c+1];
+                
+                string fitname;
+                if (!effWeight.compare("profile")) {
+                  fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                  heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
 
-                fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-                feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
-                cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
-              } else if ( (!effWeight.compare("weightedEff")) || (effWeight.compare("profile")) ){
-                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-                heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
-                cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
+                  fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                  feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                } else if ( (!effWeight.compare("weightedEff")) || (effWeight.compare("profile")) ){
+                  fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                  heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
 
-                fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
-                feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
-                cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                  fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centforwarr[c],_centforwarr[c+1]);
+                  feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                }
+                
               }
-              
+            } else {
+              for (unsigned int c=0; c<_nCentArr; c++) {
+                unsigned int nidx = a*_nPtForwArr*_nCentArr + b*_nCentArr + c;
+                double ymin=_rapforwarr[a]; double ymax=_rapforwarr[a+1];
+                double ptmin=_ptforwarr[b]; double ptmax=_ptforwarr[b+1];
+                double centmin=_centarr[c]; double centmax=_centarr[c+1];
+                
+                string fitname;
+                if (!effWeight.compare("profile")) {
+                  fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centarr[c],_centarr[c+1]);
+                  heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
+
+                  fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centarr[c],_centarr[c+1]);
+                  feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                } else if ( (!effWeight.compare("weightedEff")) || (effWeight.compare("profile")) ){
+                  fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centarr[c],_centarr[c+1]);
+                  heffLxy_LowPt[nidx] = (TH1D*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << heffLxy_LowPt[nidx] << endl;
+
+                  fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_TF",_rapforwarr[a],_rapforwarr[a+1],_ptforwarr[b],_ptforwarr[b+1],_centarr[c],_centarr[c+1]);
+                  feffLxy_LowPt[nidx] = (TF1*)effFileLxy->Get(fitname.c_str());
+                  cout << "\t" << nidx << " " << fitname << " " << feffLxy_LowPt[nidx] << endl;
+                }
+                
+              }
             }
           }
         }
       }
-    
-/*  // Start of HIN-12-001 approval setting
-      for (unsigned int a=0; a<nCentArr; a++) {
-        for (unsigned int b=0; b<nRapArr; b++) {
-          string fitname = Form("eff1D_Cent_%d_%d_Rap_%1.1f_%1.1f_default",centarr[a],centarr[a+1],raparr[b],raparr[b+1]);
-          cout << fitname << endl;
-          unsigned int nidx = a*nCentArr+b;
-          heffCentNom[nidx] = (TH1F*)effFileNominal->Get(fitname.c_str());
-          fitFcnNom[nidx] = new TF1(Form("%s_fitFcn",fitname.c_str()),fitERF,6.5,30,3);
-
-          gROOT->Macro("~/JpsiStyle.C");
-          TCanvas canvas("eff","eff",600,600); canvas.Draw();
-          heffCentNom[nidx]->GetYaxis()->SetRangeUser(0,1);
-          heffCentNom[nidx]->SetMarkerSize(1.6);
-          heffCentNom[nidx]->SetMarkerStyle(kFullCircle);
-          heffCentNom[nidx]->Draw("pe");
-
-          fitFcnNom[nidx]->SetParameters(0.5,4,8);
-          if (fitname.compare("eff1D_Cent_4_8_Rap_2.0_2.4_default") ==0) {
-            fitFcnNom[nidx]->FixParameter(2,5.6256);
-          } else if (fitname.compare("eff1D_Cent_8_12_Rap_-2.4_-2.0_default") ==0) {
-            fitFcnNom[nidx]->FixParameter(2,8.94713);
-          } else if (fitname.compare("eff1D_Cent_24_40_Rap_2.0_2.4_default") ==0) {
-            fitFcnNom[nidx]->FixParameter(2,1.44053);
-          } 
-
-          int counter =0;
-          TFitResultPtr res = heffCentNom[nidx]->Fit(Form("%s_fitFcn",fitname.c_str()),"RSI");
-          gPad->Update();
-          if (0 != res->Status()) {
-            cout << "Efficiency histogram fitting didn't converged:: " << heffCentNom[nidx]->GetName() << endl;
-            while (1) {
-              counter++;
-              res = heffCentNom[nidx]->Fit(Form("%s_fitFcn",fitname.c_str()),"SRI");
-              gPad->Update();
-              if (0 == res->Status() || counter > 10) break;
-            }
-            cout << endl;
-          }
-            
-          lat->DrawLatex(0.2,0.91,fitname.c_str());
-          fitFcnNom[nidx]->SetNpx(500);
-          fitFcnNom[nidx]->SetLineColor(kBlue);
-          fitFcnNom[nidx]->Draw("same");
-          lat->DrawLatex(0.55,0.35,Form("p0 #times Erf[(x-p1)/p2]"));
-          lat->DrawLatex(0.55,0.30,Form("#chi^{2}/ndf = %.3f / %d",fitFcnNom[nidx]->GetChisquare(),fitFcnNom[nidx]->GetNDF()));
-          lat->DrawLatex(0.55,0.25,Form("p0 = %.3f #pm %.3f",fitFcnNom[nidx]->GetParameter(0),fitFcnNom[nidx]->GetParError(0)));
-          lat->DrawLatex(0.55,0.20,Form("p1 = %.3f #pm %.3f",fitFcnNom[nidx]->GetParameter(1),fitFcnNom[nidx]->GetParError(1)));
-          lat->DrawLatex(0.55,0.15,Form("p2 = %.3f #pm %.3f",fitFcnNom[nidx]->GetParameter(2),fitFcnNom[nidx]->GetParError(2)));
-          canvas.Update();
-          canvas.SaveAs(Form("%s/%s.pdf",outputDir.c_str(),heffCentNom[nidx]->GetName()));
-          canvas.SaveAs(Form("%s/%s.png",outputDir.c_str(),heffCentNom[nidx]->GetName()));
-          canvas.SaveAs(Form("%s/%s.root",outputDir.c_str(),heffCentNom[nidx]->GetName()));
-          cout << "Eff test : " << fitFcnNom[nidx]->Eval(11.603) << endl;
-        }
-      }
-      
-      //forward + low pT region
-      for (unsigned int a=0; a<nCentForwArr; a++) {
-        for (unsigned int b=0; b<nRapForwArr; b++) {
-          if (rapforwarr[b]==-1.6 && rapforwarr[b+1]==1.6) continue;
-
-          string fitname = Form("eff1D_Cent_%d_%d_Rap_%1.1f_%1.1f_default",centforwarr[a],centforwarr[a+1],rapforwarr[b],rapforwarr[b+1]);
-          cout << fitname << endl;
-          unsigned int nidx = a*nCentForwArr+b;
-          heffCentNom_LowPt[nidx] = (TH1F*)effFileNominal_LowPt->Get(fitname.c_str());
-          fitFcnNom_LowPt[nidx] = new TF1(Form("%s_fitFcn_LowPt",fitname.c_str()),fitERF,3,30,3);
-          cout << heffCentNom_LowPt[nidx] << " " << fitFcnNom_LowPt[nidx] << endl;
-
-          gROOT->Macro("~/JpsiStyle.C");
-          TCanvas canvas("eff","eff",600,600); canvas.Draw();
-          heffCentNom_LowPt[nidx]->GetYaxis()->SetRangeUser(0,1);
-          heffCentNom_LowPt[nidx]->SetMarkerSize(1.6);
-          heffCentNom_LowPt[nidx]->SetMarkerStyle(kFullCircle);
-          heffCentNom_LowPt[nidx]->Draw("pe");
-
-          int counter =0;
-          fitFcnNom_LowPt[nidx]->SetParameters(0.25,2.5,3.0);
-          TFitResultPtr res = heffCentNom_LowPt[nidx]->Fit(Form("%s_fitFcn_LowPt",fitname.c_str()),"RSI");
-          gPad->Update();
-          if (0 != res->Status()) {
-            cout << "Efficiency histogram fitting didn't converged:: " << heffCentNom_LowPt[nidx]->GetName() << endl;
-            while (1) {
-              counter++;
-              res = heffCentNom_LowPt[nidx]->Fit(Form("%s_fitFcn_LowPt",fitname.c_str()),"RSI");
-              gPad->Update();
-              if (0 == res->Status() || counter > 10) break;
-            }
-            cout << endl;
-          }
-            
-          lat->DrawLatex(0.2,0.91,fitname.c_str());
-          fitFcnNom_LowPt[nidx]->SetNpx(500);
-          fitFcnNom_LowPt[nidx]->SetLineColor(kBlue);
-          fitFcnNom_LowPt[nidx]->Draw("same");
-          lat->DrawLatex(0.55,0.85,Form("p0 #times Erf[(x-p1)/p2]"));
-          lat->DrawLatex(0.55,0.80,Form("#chi^{2}/ndf = %.3f / %d",fitFcnNom_LowPt[nidx]->GetChisquare(),fitFcnNom_LowPt[nidx]->GetNDF()));
-          lat->DrawLatex(0.55,0.75,Form("p0 = %.3f #pm %.3f",fitFcnNom_LowPt[nidx]->GetParameter(0),fitFcnNom_LowPt[nidx]->GetParError(0)));
-          lat->DrawLatex(0.55,0.70,Form("p1 = %.3f #pm %.3f",fitFcnNom_LowPt[nidx]->GetParameter(1),fitFcnNom_LowPt[nidx]->GetParError(1)));
-          lat->DrawLatex(0.55,0.65,Form("p2 = %.3f #pm %.3f",fitFcnNom_LowPt[nidx]->GetParameter(2),fitFcnNom_LowPt[nidx]->GetParError(2)));
-          canvas.Update();
-          canvas.SaveAs(Form("%s/%s_LowPt.pdf",outputDir.c_str(),heffCentNom_LowPt[nidx]->GetName()));
-          canvas.SaveAs(Form("%s/%s_LowPt.png",outputDir.c_str(),heffCentNom_LowPt[nidx]->GetName()));
-          canvas.SaveAs(Form("%s/%s_LowPt.root",outputDir.c_str(),heffCentNom_LowPt[nidx]->GetName()));
-          cout << "Eff low pT test : " << fitFcnNom_LowPt[nidx]->Eval(4.37444) << endl;
-        }
-      }
-*/  // end of HIN-12-001 approval setting
-      
-    }
-
-    if ((trigType != 3 && trigType != 4)) {
+          
+    } else { // end of trig==3 || trig==4 
       cout << "##########################################################\n";
       cout << "You chose trigType " << trigType << endl;
       cout << "This trigType do NOT work with efficiency weighting.\n";
@@ -1074,49 +1106,110 @@ int main(int argc, char* argv[]) {
           if (tmpPt >= 3 && tmpPt < 30 && fabs(Jpsi.theRapidity)>=1.6 && fabs(Jpsi.theRapidity)<2.4) {
             // Pick up a pT eff curve
             for (unsigned int a=0; a<nRapForwArr; a++) {
-              for (unsigned int c=0; c<nCentForwArr; c++) {
-                unsigned int nidx = a*nCentForwArr + c;
-                if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
-                if ( (Jpsi.theRapidity >= rapforwarr[a] && Jpsi.theRapidity < rapforwarr[a+1]) &&
-                     (Centrality >= centforwarr[c] && Centrality < centforwarr[c+1])
-                 ) {
-                    theEffPt = feffPt_LowPt[nidx]->Eval(tmpPt);
-                    cout << "\t" << feffPt_LowPt[nidx]->GetName() << endl;
-                    if (theEffPt<=0) heffEmpty_LowPt[nidx]->Fill(tmpPt);
-
+              if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
+              if (tmpPt<=6.5) {
+                for (unsigned int c=0; c<nCentForwArr; c++) {
+                  unsigned int nidx = a*nCentForwArr + c;
+                  if ( (Jpsi.theRapidity >= rapforwarr[a] && Jpsi.theRapidity < rapforwarr[a+1]) &&
+                       (Centrality >= centforwarr[c] && Centrality < centforwarr[c+1])
+                   ) {
+                      if (useRapPtEff==1 || useRapPtEff==2) {
+                        unsigned int nidx2 = c;
+                        if (Jpsi.theRapidity>=0) nidx2 = c + nCentForwArr;
+                        theEffPt = feffRapPt_LowPt[nidx2]->Eval(Jpsi.theRapidity,tmpPt);
+                        cout << "\t" << feffRapPt_LowPt[nidx2]->GetName() << endl;
+                        if (theEffPt<=0) heffEmpty_LowPt[nidx2]->Fill(tmpPt);
+                        cout << "\t" << feffPt_LowPt[nidx]->GetName() << endl;
+                        cout << "\t 1DEffPt " << feffPt_LowPt[nidx]->Eval(tmpPt) << endl;
+                      } else {
+                        theEffPt = feffPt_LowPt[nidx]->Eval(tmpPt);
+                        cout << "\t" << feffPt_LowPt[nidx]->GetName() << endl;
+                        if (theEffPt<=0) heffEmpty_LowPt[nidx]->Fill(tmpPt);
+                      }
+                  }
                 }
-              }
+              } else {
+                for (unsigned int c=0; c<nCentArr; c++) {
+                  unsigned int nidx = a*nCentArr + c;
+                  if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
+                  if ( (Jpsi.theRapidity >= rapforwarr[a] && Jpsi.theRapidity < rapforwarr[a+1]) &&
+                       (Centrality >= centarr[c] && Centrality < centarr[c+1])
+                   ) {
+                      if (useRapPtEff==1 || useRapPtEff==2) {
+                        unsigned int nidx2 = c;
+                        if (Jpsi.theRapidity>=0) nidx2 = c + nCentArr;
+                        theEffPt = feffRapPt_ForwHighPt[nidx2]->Eval(Jpsi.theRapidity,tmpPt);
+                        cout << "\t" << feffRapPt_ForwHighPt[nidx2]->GetName() << endl;
+                        if (theEffPt<=0) heffEmpty_LowPt[nidx2]->Fill(tmpPt);
+                        cout << "\t" << feffPt_ForwHighPt[nidx]->GetName() << endl;
+                        cout << "\t 1DEffPt " << feffPt_ForwHighPt[nidx]->Eval(tmpPt) << endl;
+                      } else {
+                        theEffPt = feffPt_ForwHighPt[nidx]->Eval(tmpPt);
+                        cout << "\t" << feffPt_ForwHighPt[nidx]->GetName() << endl;
+                        if (theEffPt<=0) heffEmpty_LowPt[nidx]->Fill(tmpPt);
+                      }
+                  }
+                }
+              }  // end of forw & high pt
             }
 
-            if (isPbPb || !isPbPb) {
+            if (useLxyzCorr) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapForwArr; a++) {
+                if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
                 for (unsigned int b=0; b<_nPtForwArr; b++) {
-                  for (unsigned int c=0; c<_nCentForwArr; c++) {
-                    unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
-                    if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
-                    if ( (Jpsi.theRapidity >= _rapforwarr[a] && Jpsi.theRapidity < _rapforwarr[a+1]) &&
-                         (tmpPt >= _ptforwarr[b] && tmpPt < _ptforwarr[b+1]) &&
-                         (Centrality >= _centforwarr[c] && Centrality < _centforwarr[c+1])
-                     ) {
-                        cout << "\t" << feffLxy_LowPt[nidx]->GetName() << endl;
+                  if (tmpPt<=6.5) {
+                    for (unsigned int c=0; c<_nCentForwArr; c++) {
+                      unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
+                      if ( (Jpsi.theRapidity >= _rapforwarr[a] && Jpsi.theRapidity < _rapforwarr[a+1]) &&
+                           (tmpPt >= _ptforwarr[b] && tmpPt < _ptforwarr[b+1]) &&
+                           (Centrality >= _centforwarr[c] && Centrality < _centforwarr[c+1])
+                       ) {
+                          cout << "\t" << feffLxy_LowPt[nidx]->GetName() << endl;
 
-                        double lxy;
-                        if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
-                        else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
-                        if (TMath::Abs(lxy) >= 3) lxy = 3;
-                        theEffLxy = feffLxy_LowPt[nidx]->Eval(TMath::Abs(lxy));
-                        theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
-                        if (theEffLxy <= 0) {
-                          int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
-                          double tmp_theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber); // Get content from the previous bin
-                          if (tmp_theEffLxy > 0) theEffLxy = tmp_theEffLxy;
-                          cout << "Low eff: " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
-                        }
+                          double lxy;
+                          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+                          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+                          if (TMath::Abs(lxy) >= 3) lxy = 3;
+                          theEffLxy = feffLxy_LowPt[nidx]->Eval(TMath::Abs(lxy));
+                          theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
+                          if (theEffLxy <= 0) {
+                            int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
+                            double tmp_theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber); // Get content from the previous bin
+                            if (tmp_theEffLxy > 0) theEffLxy = tmp_theEffLxy;
+                            cout << "Low eff: " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
+                          }
 
-                        hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
+                          hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
+                      }
                     }
-                  }
+                  } else {
+                    for (unsigned int c=0; c<_nCentArr; c++) {
+                      unsigned int nidx = a*_nPtForwArr*_nCentArr + b*_nCentArr + c;
+                      if ( (Jpsi.theRapidity >= _rapforwarr[a] && Jpsi.theRapidity < _rapforwarr[a+1]) &&
+                           (tmpPt >= _ptforwarr[b] && tmpPt < _ptforwarr[b+1]) &&
+                           (Centrality >= _centarr[c] && Centrality < _centarr[c+1])
+                       ) {
+                          cout << "\t" << feffLxy_LowPt[nidx]->GetName() << endl;
+
+                          double lxy;
+                          if (use3DCtau) lxy = Jpsi.theCt*Jpsi.theP/PDGJpsiM;
+                          else lxy = Jpsi.theCt*Jpsi.thePt/PDGJpsiM;
+                          if (TMath::Abs(lxy) >= 3) lxy = 3;
+                          theEffLxy = feffLxy_LowPt[nidx]->Eval(TMath::Abs(lxy));
+                          theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
+                          if (theEffLxy <= 0) {
+                            int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
+                            double tmp_theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber); // Get content from the previous bin
+                            if (tmp_theEffLxy > 0) theEffLxy = tmp_theEffLxy;
+                            cout << "Low eff: " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
+                          }
+
+                          hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
+                      }
+                    }
+                  } // end of forw & high pt
+
                 }
               }
             }
@@ -1124,9 +1217,14 @@ int main(int argc, char* argv[]) {
             else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
             cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
 
-            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
-            if (theEffLxy <= 0) {           // This event is not going to be included!
+            if (useEffDiff) { // Difference 
+              theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+              theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+            } else { // Ratio
+              theEff = theEffLxy / theEffLxyAt0; // Get ratio between NP eff (lxyz) and NP eff (lxyz)
+              theEff = theEffPt * theEff;        // Ratio is multiplied to PR eff
+            }
+            if (useLxyzCorr && theEffLxy <= 0) {           // This event is not going to be included!
               theEff = -1;
               cout << "  " << theEffLxy << endl;
             }
@@ -1141,14 +1239,25 @@ int main(int argc, char* argv[]) {
                 if ( (Jpsi.theRapidity >= raparr[a] && Jpsi.theRapidity < raparr[a+1]) &&
                      (Centrality >= centarr[c] && Centrality < centarr[c+1])
                    ) {
-                    cout << "\t" << feffPt[nidx]->GetName() << endl;
-                    theEffPt = feffPt[nidx]->Eval(tmpPt);
-                    if (theEffPt<=0) heffEmpty[nidx]->Fill(tmpPt);
+                    if (useRapPtEff==1) {
+                      unsigned int nidx2 = c;
+                      if (Jpsi.theRapidity>=0) nidx2 = c + nCentArr;
+                      theEffPt = feffRapPt[nidx2]->Eval(Jpsi.theRapidity,tmpPt);
+                      cout << "\t" << feffRapPt[nidx2]->GetName() << endl;
+                      if (theEffPt<=0) heffEmpty[nidx2]->Fill(tmpPt);
+                      cout << "\t" << feffPt[nidx]->GetName() << endl;
+                      cout << "\t 1DEffPt " << feffPt[nidx]->Eval(tmpPt) << endl;
+                    } else {
+                      cout << "\t" << feffPt[nidx]->GetName() << endl;
+                      theEffPt = feffPt[nidx]->Eval(tmpPt);
+                      if (theEffPt<=0) heffEmpty[nidx]->Fill(tmpPt);
+                    }
+
                 }
               }
             }
 
-            if (isPbPb || !isPbPb) {
+            if (useLxyzCorr) {
               // Pick up a Lxy eff curve
               for (unsigned int a=0; a<_nRapArr; a++) {
                 for (unsigned int b=0; b<_nPtArr; b++) {
@@ -1183,9 +1292,14 @@ int main(int argc, char* argv[]) {
             else cout << "\t" << "lxy: " << Jpsi.theCt*Jpsi.thePt/PDGJpsiM << " theEffPt: " << theEffPt;
             cout << " theEffLxy: " << theEffLxy << " theEffLxyAt0: " << theEffLxyAt0 << endl;
 
-            theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
-            theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
-            if (theEffLxy <= 0) {           // This event is not going to be included!
+            if (useEffDiff) { // Difference 
+              theEff = theEffPt - theEffLxyAt0;  // Get difference between PR eff and NP eff (lxy=0) to move a lxy eff curve
+              theEff = theEffLxy + theEff;       // Lxy efficiency is moved by the difference between PR and NP efficiencies
+            } else { // Ratio
+              theEff = theEffLxy / theEffLxyAt0; // Get ratio between NP eff (lxyz) and NP eff (lxyz)
+              theEff = theEffPt * theEff;        // Ratio is multiplied to PR eff
+            }
+            if (useLxyzCorr && theEffLxy <= 0) {           // This event is not going to be included!
               theEff = -1;
               cout << "  " << theEffLxy << endl;
             }
@@ -1197,58 +1311,51 @@ int main(int argc, char* argv[]) {
           }
 
           // Apply single muon tnp scale factors
-          if (useTnPCorr) {
+          if (useTnPCorr==1) {
             double singleMuWeight = 1;
-            if (TMath::Abs(m1P->Eta()) < 1.6) singleMuWeight = gSingleMuW->Eval(m1P->Pt());
-            else singleMuWeight = gSingleMuW_LowPt->Eval(m1P->Pt());
+            if (TMath::Abs(m1P->Eta()) < 1.6) singleMuWeight = gSingleMuW[0]->Eval(m1P->Pt());
+            else singleMuWeight = gSingleMuW_LowPt[0]->Eval(m1P->Pt());
 
-            if (TMath::Abs(m2P->Eta()) < 1.6) singleMuWeight *= gSingleMuW->Eval(m2P->Pt());
-            else singleMuWeight *= gSingleMuW_LowPt->Eval(m2P->Pt());
+            if (TMath::Abs(m2P->Eta()) < 1.6) singleMuWeight *= gSingleMuW[0]->Eval(m2P->Pt());
+            else singleMuWeight *= gSingleMuW_LowPt[0]->Eval(m2P->Pt());
+            
+            theEff *= singleMuWeight;
+            cout << "\t" << "TnPCorr theEff: " << theEff << endl;
+          } else if (useTnPCorr==2 || useTnPCorr==3) {
+            double singleMuWeight = 1;
+            if (TMath::Abs(m1P->Eta()) < 0.9) {
+              singleMuWeight = gSingleMuW[0]->Eval(m1P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(m1P->Pt());
+            } else if (TMath::Abs(m1P->Eta()) >= 0.9 && TMath::Abs(m1P->Eta()) < 1.6) {
+              singleMuWeight = gSingleMuW[1]->Eval(m1P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(m1P->Pt());
+            } else if (TMath::Abs(m1P->Eta()) >= 1.6 && TMath::Abs(m1P->Eta()) < 2.1) {
+              singleMuWeight = gSingleMuW_LowPt[0]->Eval(m1P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(m1P->Pt());
+            } else {
+              singleMuWeight = gSingleMuW_LowPt[1]->Eval(m1P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(m1P->Pt());
+            }
+
+            if (TMath::Abs(m2P->Eta()) < 0.9) {
+              singleMuWeight *= gSingleMuW[0]->Eval(m2P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(m2P->Pt());
+            } else if (TMath::Abs(m2P->Eta()) >= 0.9 && TMath::Abs(m2P->Eta()) < 1.6) {
+              singleMuWeight *= gSingleMuW[1]->Eval(m2P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA->Eval(m2P->Pt());
+            } else if (TMath::Abs(m2P->Eta()) >= 1.6 && TMath::Abs(m2P->Eta()) < 2.1) {
+              singleMuWeight *= gSingleMuW_LowPt[0]->Eval(m2P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(m2P->Pt());
+            } else {
+              singleMuWeight *= gSingleMuW_LowPt[1]->Eval(m2P->Pt());
+              if (useTnPCorr==2) singleMuWeight *= gSingleMuWSTA_LowPt->Eval(m2P->Pt());
+            }
+            
             
             theEff *= singleMuWeight;
             cout << "\t" << "TnPCorr theEff: " << theEff << endl;
           }
 
-          if (trigType == 3) {  //bit 1 case
-/*  // efficiency for HIN-12-001 preliminary
-             if (tmpPt >= 3 && tmpPt < 6.5 && fabs(Jpsi.theRapidity)>=1.6 && fabs(Jpsi.theRapidity)<2.4) {
-              for (unsigned int a=0; a<nCentForwArr; a++) {
-                for (unsigned int b=0; b<nRapForwArr; b++) {
-                  if (rapforwarr[b]==-1.6 && rapforwarr[b+1]==1.6) continue;
-                  if ( (Jpsi.theRapidity >= rapforwarr[b] && Jpsi.theRapidity < rapforwarr[b+1]) &&
-                       (Centrality >= centforwarr[a] && Centrality < centforwarr[a+1])
-                   ) {
-                      theEff = fitFcnNom_LowPt[a*nCentForwArr + b]->Eval(tmpPt);
-                      cout << fitFcnNom_LowPt[a*nCentForwArr + b]->GetName() << " " << theEff << endl;
-                  } 
-                }
-              }
-              if (theEff == 0) {
-                cout << "low pT, Cannot be found in given rap, cent arrays!" << endl;
-                theEff=1;
-              }
-
-            } else if (tmpPt >= 6.5 && fabs(Jpsi.theRapidity)<2.4) {
-              for (unsigned int a=0; a<nCentArr; a++) {
-                for (unsigned int b=0; b<nRapArr; b++) {
-                  if ( (Jpsi.theRapidity >= raparr[b] && Jpsi.theRapidity < raparr[b+1]) &&
-                       (Centrality >= centarr[a] && Centrality < centarr[a+1])
-                     ) {
-                      theEff = fitFcnNom[a*nCentArr + b]->Eval(tmpPt);
-                      cout << fitFcnNom[a*nCentArr + b]->GetName() << " " << theEff << endl;
-                  }
-                }
-              }
-              if (theEff == 0) {
-                cout << "high pT, Cannot be found in given rap, cent arrays!" << endl;
-                theEff=1;
-              }
-            } else {
-              theEff = 1.0;
-            } // end of HIN-12-001 efficiency correction
-*/
-          }
-        
         } else { theEff = 1.0; }  // end of the weighting condition
         if (theEff>0) Jpsi.theEff = 1.0/theEff;
         else {
@@ -1495,7 +1602,7 @@ int main(int argc, char* argv[]) {
       }
     }
       
-    for (unsigned int a=0; a<nRapForwArr; a++) {
+/*    for (unsigned int a=0; a<nRapForwArr; a++) {
       for (unsigned int c=0; c<nCentForwArr; c++) {
         unsigned int nidx = a*nCentForwArr + c;
         if (rapforwarr[a]==-1.6 && rapforwarr[a+1]==1.6) continue;
@@ -1509,7 +1616,7 @@ int main(int argc, char* argv[]) {
           canv->Clear();
         }
       }
-    }
+    } */
   }
 
   // Perform the weighting on the dataset
@@ -1543,8 +1650,15 @@ int main(int argc, char* argv[]) {
   cout << "PassingEvent: " << PassingEvent->GetEntries() << endl;
   delete PassingEvent;
 
-  delete gSingleMuW;
-  delete gSingleMuW_LowPt;
+  if (useTnPCorr==1) {
+    delete gSingleMuW[0];
+    delete gSingleMuW_LowPt[0];
+  } else if (useTnPCorr==2) {
+    delete gSingleMuW[0];
+    delete gSingleMuW[1];
+    delete gSingleMuW_LowPt[0];
+    delete gSingleMuW_LowPt[1];
+  }
 
   return 0;
 
@@ -1568,19 +1682,22 @@ bool isAccept(const TLorentzVector* aMuon) {
   else return false;
 }
 
-bool checkRunType(const struct Condition Jpsi, const TLorentzVector* m1P, const TLorentzVector* m2P, double var) {
-  double eta1 = fabs(m1P->Eta()); 
-  double eta2 = fabs(m2P->Eta()); 
-  double pt1  = m1P->Pt();  
-  double pt2  = m2P->Pt();
+bool isMuonInAccept(const TLorentzVector *aMuon) {
+  return (fabs(aMuon->Eta()) < 2.4 &&
+         ((fabs(aMuon->Eta()) < 1.0 && aMuon->Pt() >= 3.4) ||
+         (1.0 <= fabs(aMuon->Eta()) && fabs(aMuon->Eta()) < 1.5 && aMuon->Pt() >= 5.8-2.4*fabs(aMuon->Eta())) ||
+         (1.5 <= fabs(aMuon->Eta()) && aMuon->Pt() >= 3.3667-7.0/9.0*fabs(aMuon->Eta()))));
+}
 
+
+bool checkRunType(const struct Condition Jpsi, const TLorentzVector* m1P, const TLorentzVector* m2P, double var) {
   if (runType == 1) {
     if (Jpsi.mupl_nMuValHits > 12 && Jpsi.mumi_nMuValHits > 12) return true;
     else return false;
   }
   else if (runType == 2) {
-    if (isAccept(m1P) || isAccept(m2P)) return true;
-//    if (isAccept(m1P) && isAccept(m2P)) return true;
+//    if (isAccept(m1P) || isAccept(m2P)) return true;
+    if (isMuonInAccept(m1P) && isMuonInAccept(m2P)) return true;
     else return false;
   }
   else if (runType == 3) {
@@ -1616,32 +1733,6 @@ bool checkRunType(const struct Condition Jpsi, const TLorentzVector* m1P, const 
   }
   else if (runType == 9) {
     return true;
-  }
-  else if (runType==101) {
-    bool fwdMu  = (1.5 <= eta1 && 1.5 <= eta2);
-    bool ptLim1 = (pt1 >= 3.12-0.59*eta1);
-    bool ptLim2 = (pt2 >= 3.12-0.59*eta2);
-    
-    return (fwdMu && ptLim1 && ptLim2);
-  }
-  else if (runType==102) {
-    bool fwdMu  = (1.5 <= eta1 && 1.5 <= eta2);
-    bool ptLim1 = (pt1 >= 2.95-0.48*eta1);
-    bool ptLim2 = (pt2 >= 2.95-0.48*eta2);
-
-    return (fwdMu && ptLim1 && ptLim2);
-  }
-  else if (runType==103) {
-    bool fwdMu  = (1.5 <= eta1 && 1.5 <= eta2);
-    bool ptLim1 = (pt1 >= 2.79-0.37*eta1);
-    bool ptLim2 = (pt2 >= 2.79-0.37*eta2);
-    
-    return (fwdMu && ptLim1 && ptLim2);
-  }
-  else if (runType==104) {
-    bool fwdMu  = (1.5 <= eta1 && 1.5 <= eta2);
-    bool ptLim1 = (pt1 >= 2.62-0.26*eta1);
-    bool ptLim2 = (pt2 >= 2.62-0.26*eta2);
   }
 
   return true;

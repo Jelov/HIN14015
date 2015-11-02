@@ -746,8 +746,12 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
   SetLegendStyle(leg);
   TH1D *hGenT = new TH1D("hGenT","",1,0,1);
   TH1D *hGenT2 = new TH1D("hGenT2","",1,0,1);
+  TH1D *hGenT3 = new TH1D("hGenT3","",1,0,1);
+  TH1D *hGenT4 = new TH1D("hGenT4","",1,0,1);
   TH1D *hRecT = new TH1D("hRecT","",1,0,1);
   SetHistStyle(hGenT2,1,0,0,1);
+  SetHistStyle(hGenT3,3,1,0,1);
+  SetHistStyle(hGenT4,5,1,0,1);
   SetHistStyle(hRecT,0,0,0,1);
   leg->AddEntry(hGenT2,"Gen dimuon","lp");
   leg->AddEntry(hRecT,"Reco dimuon","lp");
@@ -789,6 +793,13 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
 
   //////// 1DEffLxy for really used histos
+  TLegend *leg1d = new TLegend(0.13,0.14,0.5,0.23);
+  SetLegendStyle(leg1d);
+  leg1d->AddEntry(hRecT,"Reco Nonprompt MC dimuon","lp");
+  leg1d->AddEntry(hGenT2,"Gen Nonprompt MC dimuon","lp");
+  leg1d->AddEntry(hGenT3,"Gen Prompt MC dimuon","lp");
+  leg1d->AddEntry(hGenT4,"Reco Prompt MC dimuon","lp");
+
   for (int i=0; i<nbinsy-1; i++) {
     for (int j=0; j<nbinspt-1; j++) {
       for (int k=0; k<nbinscent-1; k++) {
@@ -800,9 +811,41 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
         TCanvas *canv = new TCanvas("c","c",600,600);
         canv->Draw();
+
+        string className = "PRJpsi";
+        TH1D *hPRGen = (TH1D*)PROut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        TH1D *hPRRec = (TH1D*)PROut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        SetHistStyle(hPRGen,3,1,1E-3,hPRGen->GetMaximum()*15);
+        SetHistStyle(hPRRec,5,1,1E-3,hPRGen->GetMaximum()*15);
+        className = "NPJpsi";
+        TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+        SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+        SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
+
+        canv->SetLogy(1);
+        hNPGen->Draw();
+        hNPRec->Draw("same");
+        hPRGen->Draw("same");
+        hPRRec->Draw("same");
+
+        std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
+        if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
+        else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
+        lat->DrawLatex(0.15,0.35,testStr.second.c_str());
+        lat->DrawLatex(0.15,0.30,testStr.first.c_str());
+        if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+        leg1d->Draw();
+
+        canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+        canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+        delete canv;
+
+        canv = new TCanvas("c","c",600,600);
+        canv->Draw();
         canv->SetLogy(0);
 
-        string className = "NPJpsi";
+        className = "NPJpsi";
         TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
         cout << Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax) << endl;
         className = "PRJpsi";
@@ -812,7 +855,6 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
         hNPEff->Draw();
         hPREff->Draw("same");
-        std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
         if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
         else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
         lat->DrawLatex(0.15,0.85,testStr.second.c_str());
@@ -841,8 +883,8 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
     string className = "NPJpsi";
     TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
     TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-7,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-7,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
 
     canv->SetLogy(1);
     hNPGen->Draw();
@@ -898,8 +940,8 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
     string className = "NPJpsi";
     TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
     TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-7,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-7,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
 
     hNPGen->Draw();
     hNPRec->Draw("same");
@@ -955,8 +997,8 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
     string className = "NPJpsi";
     TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
     TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-7,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-7,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
 
     hNPGen->Draw();
     hNPRec->Draw("same");
@@ -1000,96 +1042,11 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
   } //end of cent loop plot
 
+  NPOut->Close();
+  PROut->Close();
+
   return;
-  NPOut->Close();
-  PROut->Close();
-
 }
-
-void LxyEff_1D(bool absRapidity=true, bool logy=false, bool isPbPb=false, string prefix="lxyBins", string fileNP="NPMC3D_eff.root", string filePR="PRMC3D_eff.root") {
-  gROOT->Macro("../JpsiStyle.C");
-  
-  TFile *NPOut = new TFile(fileNP.c_str(),"read");
-  TFile *PROut = new TFile(filePR.c_str(),"read");
-  if (!NPOut->IsOpen() || !PROut->IsOpen()) {
-    cout << "cannot open " << fileNP << " or " << filePR << endl;
-    return ;
-  }
-
-  TLatex *lat = new TLatex(); lat->SetNDC(kTRUE);
-  TLegend *leg = new TLegend(0.13,0.74,0.5,0.85);
-  SetLegendStyle(leg);
-    
-  double _ymin=yarray[0]; double _ymax=yarray[nbinsy-1];
-  double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt-1];
-  int _centmin=centarray[0]; int _centmax=centarray[nbinscent-1];
-  
-  TH1D *hNPEff[3];
-  TH1D *hPREff[3];
-  
-  string className = "NPJpsi";
-  hNPEff[0] = (TH1D*)NPOut->Get(Form("h1DEffRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  hNPEff[1] = (TH1D*)NPOut->Get(Form("h1DEffPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  hNPEff[2] = (TH1D*)NPOut->Get(Form("h1DEffCent_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  className = "PRJpsi";
-  hPREff[0] = (TH1D*)PROut->Get(Form("h1DEffRap_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  hPREff[1] = (TH1D*)PROut->Get(Form("h1DEffPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  hPREff[2] = (TH1D*)PROut->Get(Form("h1DEffCent_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-
-
-  leg->AddEntry(hPREff[0],Form("Prompt"),"pe");
-  leg->AddEntry(hNPEff[0],Form("Non-prompt"),"pe");
-
-  TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
-  canvNP->Draw();
-  canvNP->SetLogy(0);
-
-  std::pair< string, string > testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
-  
-  for (int i=0; i<3; i++) {
-    SetHistStyle(hNPEff[i],0,0,0,1.3);
-    SetHistStyle(hPREff[i],0,1,0,1.3);
-
-    canvNP->Clear();
-    canvNP->cd();
-
-    hNPEff[i]->Draw();
-    hPREff[i]->Draw("same");
-
-    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-    if (i==0) {
-      lat->DrawLatex(0.6,0.85,testStr.first.c_str());
-      if (isPbPb) lat->DrawLatex(0.6,0.80,Form("Cent. %.0f-%.0f%%",_centmin*2.5,_centmax*2.5));
-    } else if (i==1) {
-      lat->DrawLatex(0.6,0.85,testStr.second.c_str());
-      if (isPbPb) lat->DrawLatex(0.6,0.80,Form("Cent. %.0f-%.0f%%",_centmin*2.5,_centmax*2.5));
-    } else if (i==2) {
-      lat->DrawLatex(0.6,0.85,testStr.second.c_str());
-      lat->DrawLatex(0.6,0.80,testStr.first.c_str());
-    }
-    
-    leg->Draw();
-    if (i==0) {
-      canvNP->SaveAs(Form("./%s_1DEffRap_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-      canvNP->SaveAs(Form("./%s_1DEffRap_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-    } else if (i==1) {
-      canvNP->SaveAs(Form("./%s_1DEffPt_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-      canvNP->SaveAs(Form("./%s_1DEffPt_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-    } else if (i==2) {
-      canvNP->SaveAs(Form("./%s_1DEffCent_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-      canvNP->SaveAs(Form("./%s_1DEffCent_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",prefix.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-    }
-
-  } // end of loop plotting
-
-  delete canvNP;
-  NPOut->Close();
-  PROut->Close();
-
-}
-
-
 
 
 int main(int argc, char *argv[]) {
@@ -1111,13 +1068,9 @@ int main(int argc, char *argv[]) {
 
   LxyEff_all(absRapidity, logy, isPbPb);
   LxyEff_diff3D(absRapidity, logy, isPbPb);
-  LxyEff_diffRap(absRapidity, logy, isPbPb);
+//  LxyEff_diffRap(absRapidity, logy, isPbPb);
   LxyEff_diffPt(absRapidity, logy, isPbPb);
-  LxyEff_diffCent(absRapidity, logy, isPbPb);
-
-//  LxyEff_1D(absRapidity, logy, isPbPb, "lxyBins", "NPMC3D_eff.root", "PRMC3D_eff.root");
-
-  LxyEff_1D(absRapidity, logy, isPbPb, "anaBins", "NPMC3DAnaBins_eff.root", "PRMC3DAnaBins_eff.root");
+//  LxyEff_diffCent(absRapidity, logy, isPbPb);
 
   return 0;
   

@@ -3,16 +3,18 @@
 
 int main(int argc, char *argv[]) {
   bool absRapidity, npmc, isPbPb;
+  int useTnP;
 
-  if (argc != 4) {
+  if (argc != 5) {
     cout << "Need input arguments!" << endl;
-    cout << "./lJpsiEff [absRapidity] [NPMC(0) or PRMC(1)] [isPbPb(1) or ispp(0)]" <<endl;
+    cout << "./lJpsiEff [absRapidity] [NPMC(1) or PRMC(0)] [isPbPb(1) or ispp(0)] [useTnP(0) or useTnP(1)]" <<endl;
     return -1;
   } else {
     absRapidity = atoi(argv[1]);
     npmc = atoi(argv[2]);
     isPbPb = atoi(argv[3]);
-    cout << "     absRapidity: " << absRapidity << " npmc: " << npmc << " isPbPb: " << isPbPb << endl;
+    useTnP = atoi(argv[4]);
+    cout << "     absRapidity: " << absRapidity << " npmc: " << npmc << " isPbPb: " << isPbPb << " useTnP: " << useTnP << endl;
   }
 
   gROOT->Macro("../JpsiStyle.C");
@@ -48,7 +50,7 @@ int main(int argc, char *argv[]) {
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *NPMC = new EffMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb);
+    EffMC *NPMC = new EffMC(nfiles,filelist,filelist2,"NPJpsi",absRapidity,true,isPbPb,useTnP);
     NPMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     NPMC->SetTree();
     NPMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
@@ -64,7 +66,7 @@ int main(int argc, char *argv[]) {
     };
     int nfiles = sizeof(filelist)/sizeof(string);
 
-    EffMC *PRMC = new EffMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb);
+    EffMC *PRMC = new EffMC(nfiles,filelist,filelist2,"PRJpsi",absRapidity,false,isPbPb,useTnP);
     PRMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     PRMC->SetTree();
     PRMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
