@@ -4,12 +4,12 @@
 //Write() function of the RooPlot
 
 int main (int argc, char* argv[]) {
-  RooMsgService::instance().getStream(0).removeTopic(Plotting);
+//  RooMsgService::instance().getStream(0).removeTopic(Plotting);
   RooMsgService::instance().getStream(0).removeTopic(InputArguments);
   RooMsgService::instance().getStream(1).removeTopic(InputArguments);
-  RooMsgService::instance().getStream(1).removeTopic(Plotting);
-  RooMsgService::instance().getStream(1).removeTopic(NumIntegration);
-  RooMsgService::instance().getStream(1).removeTopic(Minimization);
+//  RooMsgService::instance().getStream(1).removeTopic(Plotting);
+//  RooMsgService::instance().getStream(1).removeTopic(NumIntegration);
+//  RooMsgService::instance().getStream(1).removeTopic(Minimization);
   RooMsgService::instance().getStream(1).removeTopic(Caching);
 
   gROOT->Macro("/afs/cern.ch/user/m/miheejo/public/JpsiV2/JpsiStyle.C");
@@ -514,9 +514,9 @@ int main (int argc, char* argv[]) {
                 }
               } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
                 ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setRange(0.02,0.09);
                 ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.04);
+                ws->var("sigmaSig1")->setVal(0.05);
                 ws->var("sigmaSig2")->setVal(0.03);
               } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
                 ws->var("coefExp")->setRange(-1,3);
@@ -569,11 +569,16 @@ int main (int argc, char* argv[]) {
                 } else if (centest && !dPhitest) {
                   ws->var("sigmaSig2")->setVal(0.013);
                 }
-              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-                ws->var("sigmaSig1")->setRange(0.05,0.11);
-                ws->var("sigmaSig2")->setRange(0.01,0.07);
-                ws->var("sigmaSig1")->setVal(0.08);
+              } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
+                ws->var("sigmaSig1")->setRange(0.01,0.12);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.05);
                 ws->var("sigmaSig2")->setVal(0.04);
+              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
+                ws->var("sigmaSig1")->setRange(0.01,0.15);
+                ws->var("sigmaSig2")->setRange(0.01,0.09);
+                ws->var("sigmaSig1")->setVal(0.04);
+                ws->var("sigmaSig2")->setVal(0.03);
               }
             }
             // end of pT < 6.5 || pT 3-30
@@ -590,8 +595,9 @@ int main (int argc, char* argv[]) {
 
           if (inOpt.ymin==2.0 && inOpt.ymax==2.4) {
             ws->var("sigmaSig1")->setRange(0.01,0.11);
-            ws->var("sigmaSig2")->setRange(0.01,0.08);
-            ws->var("sigmaSig2")->setVal(0.05);
+            ws->var("sigmaSig2")->setRange(0.01,0.11);
+            ws->var("sigmaSig1")->setVal(0.04);
+            ws->var("sigmaSig2")->setVal(0.04);
           }
         } // rap > 1.6
       } // PbPb
@@ -1133,7 +1139,8 @@ int main (int argc, char* argv[]) {
         if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
         if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
         if (inOpt.isPbPb==0) { //pp
-          if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
+          if ( (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) ||
+               (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==8) ) {
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
           } else {
@@ -1141,17 +1148,13 @@ int main (int argc, char* argv[]) {
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
           }
         } else if (inOpt.isPbPb==1) { //PbPb
-          if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) ||
-               (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==0 && inOpt.cmax==10 && inOpt.psmin==0.393 && inOpt.psmax==0.785) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==20 && (inOpt.cmax==30 || inOpt.cmax==40)) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==30 && inOpt.cmax==60 && inOpt.psmin==0.393 && inOpt.psmax==0.785) ||
-               (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.785 && inOpt.psmax==1.178)
+          if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) 
              ){
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-          } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5) {
-            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
-            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
+          } else if (inOpt.ymin>=1.6 && inOpt.ymax<=2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
+            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
+            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
           } else { //Normal PbPb bins
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
@@ -1168,13 +1171,13 @@ int main (int argc, char* argv[]) {
       cout << "DATA :: N events to fit on the sidebands: " << redDataSB->sumEntries() << endl;
 
       if (inOpt.isPbPb ==0) {
-        if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==8.0) {
-          ws->var("fpm")->setVal(0.9991);
-          ws->var("fLiving")->setVal(0.66025);
-          ws->var("fbkgCtTot")->setVal(0.29972);
-          ws->var("lambdap")->setVal(0.42684);
-          ws->var("lambdam")->setVal(0.008414);
-          ws->var("lambdasym")->setVal(0.0897);
+        if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && (inOpt.pmax==7.5 || inOpt.pmax==8.0)) {
+          ws->var("fpm")->setVal(0.999);
+          ws->var("fLiving")->setVal(0.906);
+          ws->var("fbkgCtTot")->setVal(0.255);
+          ws->var("lambdap")->setVal(0.445);
+          ws->var("lambdam")->setVal(0.141);
+          ws->var("lambdasym")->setVal(0.152);
         } else if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==7.5) {
           ws->var("fpm")->setVal(0.986202);
           ws->var("fLiving")->setVal(0.636215);
@@ -1182,43 +1185,51 @@ int main (int argc, char* argv[]) {
           ws->var("lambdap")->setVal(0.413972);
           ws->var("lambdam")->setVal(0.504259);
           ws->var("lambdasym")->setVal(0.0781019);
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && (inOpt.pmin==3 || inOpt.pmin==4.5) && (inOpt.pmax==4.5 || inOpt.pmax==5.5 || inOpt.pmax==6.5) ) {
-          ws->var("fpm")->setVal(0.604708);
-          ws->var("fLiving")->setVal(0.970657);
-          ws->var("fbkgCtTot")->setVal(0.419638);
-          ws->var("lambdap")->setVal(0.296444);
-          ws->var("lambdam")->setVal(0.100396);
-          ws->var("lambdasym")->setVal(0.72977);
+        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && (inOpt.pmin==3 || inOpt.pmin==4.5) && (inOpt.pmax==4.5 || inOpt.pmax==5.5) ) {
+          ws->var("fpm")->setVal(0.9769);
+          ws->var("fLiving")->setVal(0.89133);
+          ws->var("fbkgCtTot")->setVal(0.31286);
+          ws->var("lambdap")->setVal(0.40377);
+          ws->var("lambdam")->setVal(0.14095);
+          ws->var("lambdasym")->setVal(0.14098);
+        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5) {
+          ws->var("fpm")->setVal(0.9769);
+          ws->var("fLiving")->setVal(0.89133);
+          ws->var("fbkgCtTot")->setVal(0.31286);
+          ws->var("lambdap")->setVal(0.40377);
+          ws->var("lambdam")->setVal(0.14095);
+          ws->var("lambdasym")->setVal(0.14098);
         } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-          ws->var("fpm")->setVal(0.657742);
-          ws->var("fLiving")->setVal(0.981838);
-          ws->var("fbkgCtTot")->setVal(0.547222);
-          ws->var("lambdap")->setVal(0.357091);
-          ws->var("lambdam")->setVal(0.108241);
-          ws->var("lambdasym")->setVal(0.513166);
+          ws->var("fpm")->setVal(0.9769);
+          ws->var("fLiving")->setVal(0.89133);
+          ws->var("fbkgCtTot")->setVal(0.31286);
+          ws->var("lambdap")->setVal(0.40377);
+          ws->var("lambdam")->setVal(0.14095);
+          ws->var("lambdasym")->setVal(0.14098);
         } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3.0 && inOpt.pmax==30) {
-          ws->var("fpm")->setVal(0.756);
-          ws->var("fLiving")->setVal(0.980);
-          ws->var("fbkgCtTot")->setVal(0.506);
-          ws->var("lambdap")->setVal(0.315);
-          ws->var("lambdam")->setVal(0.120);
-          ws->var("lambdasym")->setVal(1.07);
+          ws->var("fpm")->setVal(0.817944);
+          ws->var("fLiving")->setVal(0.9999);
+          ws->var("fbkgCtTot")->setVal(0.604322);
+          ws->var("lambdap")->setVal(0.4172);
+          ws->var("lambdam")->setVal(0.0846182);
+          ws->var("lambdasym")->setVal(0.483258);
         } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.0 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          ws->var("fpm")->setVal(0.999921);
-          ws->var("fLiving")->setVal(0.8181);
-          ws->var("fbkgCtTot")->setVal(0.377159);
-          ws->var("lambdap")->setVal(0.375852);
-          ws->var("lambdam")->setVal(0.0735429);
-          ws->var("lambdasym")->setVal(0.170462);
+          ws->var("fpm")->setVal(0.99);
+          ws->var("fLiving")->setVal(0.785);
+          ws->var("fbkgCtTot")->setVal(0.336);
+          ws->var("lambdap")->setVal(0.46941);
+          ws->var("lambdam")->setVal(0.140905);
+          ws->var("lambdasym")->setVal(0.140942);
         }
       } else if (inOpt.isPbPb == 1) {
-        if (inOpt.ymin==0.0 && inOpt.ymax==1.2 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==50 && inOpt.cmax==100) {
-          ws->var("fpm")->setVal(0.8478);
-          ws->var("fLiving")->setVal(0.5856);
-          ws->var("fbkgCtTot")->setVal(0.0003);
-          ws->var("lambdap")->setVal(0.255);
-          ws->var("lambdam")->setVal(0.016);
-          ws->var("lambdasym")->setVal(0.02);
+        if (inOpt.ymin==0.0 && inOpt.ymax==1.2 && inOpt.pmin==6.5 && inOpt.pmax==30 &&
+           (inOpt.cmin==40 || inOpt.cmin==50) && (inOpt.cmax==100 || inOpt.cmax==50)) {
+          ws->var("fpm")->setVal(0.62427);
+          ws->var("fLiving")->setVal(0.77221);
+          ws->var("fbkgCtTot")->setVal(0.1);
+          ws->var("lambdap")->setVal(0.40456);
+          ws->var("lambdam")->setVal(0.018352);
+          ws->var("lambdasym")->setVal(0.030308);
         } else if (inOpt.ymin==0.0 && inOpt.ymax==2.4) {
           if (inOpt.pmin==6.5 && (inOpt.pmax==8 || inOpt.pmax==7.5) ) {
             ws->var("fpm")->setVal(0.49);
@@ -1227,6 +1238,13 @@ int main (int argc, char* argv[]) {
             ws->var("lambdap")->setVal(0.13);
             ws->var("lambdam")->setVal(0.088);
             ws->var("lambdasym")->setVal(0.3);
+          } else if (inOpt.pmin==6.5 && inOpt.pmax==10 && inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
+            ws->var("fpm")->setVal(0.521124);
+            ws->var("fLiving")->setVal(0.963374);
+            ws->var("fbkgCtTot")->setVal(0.456605);
+            ws->var("lambdap")->setVal(0.190191);
+            ws->var("lambdam")->setVal(0.0583877);
+            ws->var("lambdasym")->setVal(0.478137);
           } else if (inOpt.pmin==6.5 && inOpt.pmax==30) {
             if (inOpt.cmin==60 && inOpt.cmax==100) {
               ws->var("fpm")->setVal(0.419);
@@ -1242,16 +1260,36 @@ int main (int argc, char* argv[]) {
               ws->var("lambdap")->setVal(0.2921);
               ws->var("lambdam")->setVal(0.05098);
               ws->var("lambdasym")->setVal(0.1191);
-            } else if (inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
-              ws->var("fpm")->setVal(0.4376);
-              ws->var("fLiving")->setVal(0.9430);
-              ws->var("fbkgCtTot")->setVal(0.2597);
-              ws->var("lambdap")->setVal(0.1531);
-              ws->var("lambdam")->setVal(0.0473);
-              ws->var("lambdasym")->setVal(0.3062);
+            } else if (inOpt.cmin==10 && inOpt.cmax==20 && inOpt.psmin==0.000 && inOpt.psmax==0.393){
+              ws->var("fpm")->setVal(0.604194);
+              ws->var("fLiving")->setVal(0.932512);
+              ws->var("fbkgCtTot")->setVal(0.429754);
+              ws->var("lambdap")->setVal(0.138205);
+              ws->var("lambdam")->setVal(0.0550462);
+              ws->var("lambdasym")->setVal(0.324249);
+            } else if (inOpt.cmin==10 && inOpt.cmax==20 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
+              ws->var("fpm")->setVal(0.965);
+              ws->var("fLiving")->setVal(0.4255);
+              ws->var("fbkgCtTot")->setVal(0.564);
+              ws->var("lambdap")->setVal(0.401);
+              ws->var("lambdam")->setVal(0.00935);
+              ws->var("lambdasym")->setVal(0.09357);
+/*            } else if (inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.000 && inOpt.psmax==0.393 ){
+              ws->var("fpm")->setVal(0.938882);
+              ws->var("fLiving")->setVal(0.430142);
+              ws->var("fbkgCtTot")->setVal(0.470296);
+              ws->var("lambdap")->setVal(0.148118);
+              ws->var("lambdam")->setVal(0.00706525);
+              ws->var("lambdasym")->setVal(0.0677687);
+*/            } else if (inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
+              ws->var("fpm")->setVal(0.487987);
+              ws->var("fLiving")->setVal(0.999);
+              ws->var("fbkgCtTot")->setVal(0.399004);
+              ws->var("lambdap")->setVal(0.157051);
+              ws->var("lambdam")->setVal(0.0573936);
+              ws->var("lambdasym")->setVal(0.110217);
             } // end of PbPb rap0.0-2.4_pT6.5-30.0
-          } else if (inOpt.pmin==10 && inOpt.pmax==13 &&
-                     inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
+          } else if (inOpt.pmin==10 && inOpt.pmax==13 && inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
             ws->var("fpm")->setVal(0.80241);
             ws->var("fLiving")->setVal(0.479431);
             ws->var("fbkgCtTot")->setVal(0.00001);
@@ -1301,19 +1339,26 @@ int main (int argc, char* argv[]) {
           if (inOpt.doWeight == 0) {
             if (inOpt.cmin == 0 && inOpt.cmax == 100) {
               if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-                ws->var("fpm")->setVal(0.999);
-                ws->var("fLiving")->setVal(0.284);
-                ws->var("fbkgCtTot")->setVal(0.675);
-                ws->var("lambdap")->setVal(0.21477);
-                ws->var("lambdam")->setVal(0.01348);
-                ws->var("lambdasym")->setVal(0.094496);
+                ws->var("fpm")->setVal(0.957671);
+                ws->var("fLiving")->setVal(0.737527);
+                ws->var("fbkgCtTot")->setVal(0.763807);
+                ws->var("lambdap")->setVal(0.13676);
+                ws->var("lambdam")->setVal(0.123463);
+                ws->var("lambdasym")->setVal(0.296977);
               } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                ws->var("fpm")->setVal(0.999);
-                ws->var("fLiving")->setVal(0.295622);
-                ws->var("fbkgCtTot")->setVal(0.692533);
-                ws->var("lambdap")->setVal(0.252302);
-                ws->var("lambdam")->setVal(0.01430);
-                ws->var("lambdasym")->setVal(0.0882);
+                ws->var("fpm")->setVal(0.957671);
+                ws->var("fLiving")->setVal(0.737527);
+                ws->var("fbkgCtTot")->setVal(0.763807);
+                ws->var("lambdap")->setVal(0.13676);
+                ws->var("lambdam")->setVal(0.123463);
+                ws->var("lambdasym")->setVal(0.296977);
+              } else if (inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.psmin==0.785 && inOpt.psmax==1.178) {
+                ws->var("fpm")->setVal(0.9999);
+                ws->var("fLiving")->setVal(0.53854);
+                ws->var("fbkgCtTot")->setVal(0.77793);
+                ws->var("lambdap")->setVal(0.18213);
+                ws->var("lambdam")->setVal(0.011501);
+                ws->var("lambdasym")->setVal(0.12218);
               } else {
                 ws->var("fpm")->setVal(0.999);
                 ws->var("fLiving")->setVal(0.27254);
@@ -1322,14 +1367,21 @@ int main (int argc, char* argv[]) {
                 ws->var("lambdam")->setVal(0.013298);
                 ws->var("lambdasym")->setVal(0.0798);
               }
-            } else if (inOpt.cmin == 20 && (inOpt.cmax == 30 || inOpt.cmax == 40)) {
+            }/* else if (inOpt.cmin == 20 && inOpt.cmax == 30) {
+              ws->var("fpm")->setVal(0.999);
+              ws->var("fLiving")->setVal(0.6869);
+              ws->var("fbkgCtTot")->setVal(0.74382);
+              ws->var("lambdap")->setVal(0.10633);
+              ws->var("lambdam")->setVal(0.00899);
+              ws->var("lambdasym")->setVal(0.21727);
+            } else if (inOpt.cmin == 20 && inOpt.cmax == 40) {
               ws->var("fpm")->setVal(0.999);
               ws->var("fLiving")->setVal(0.327);
               ws->var("fbkgCtTot")->setVal(0.606);
               ws->var("lambdap")->setVal(0.145);
               ws->var("lambdam")->setVal(0.0158);
               ws->var("lambdasym")->setVal(0.083);
-            } else if (inOpt.cmin == 30 && inOpt.cmax == 40) {
+            }*/ else if (inOpt.cmin == 30 && inOpt.cmax == 40) {
               ws->var("fpm")->setVal(0.99975);
               ws->var("fLiving")->setVal(0.45546);
               ws->var("fbkgCtTot")->setVal(0.70);
@@ -1343,7 +1395,7 @@ int main (int argc, char* argv[]) {
               ws->var("lambdap")->setVal(0.181);
               ws->var("lambdam")->setVal(0.501);
               ws->var("lambdasym")->setVal(0.0256);
-            } else if (inOpt.cmin == 50 && inOpt.cmax == 100) {
+            } else if ((inOpt.cmin == 40 || inOpt.cmin == 50) && inOpt.cmax == 100) {
               ws->var("fpm")->setVal(0.99);
               ws->var("fLiving")->setVal(0.064);
               ws->var("fbkgCtTot")->setVal(0.0001);
@@ -1359,7 +1411,28 @@ int main (int argc, char* argv[]) {
               ws->var("lambdasym")->setVal(0.12);
             } // end of not-weighted setting
           } else {  // weighting applied
-            if (inOpt.cmin == 40 && inOpt.cmax == 50) {
+            if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+              ws->var("fpm")->setVal(0.957671);
+              ws->var("fLiving")->setVal(0.737527);
+              ws->var("fbkgCtTot")->setVal(0.763807);
+              ws->var("lambdap")->setVal(0.13676);
+              ws->var("lambdam")->setVal(0.123463);
+              ws->var("lambdasym")->setVal(0.296977);
+            } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
+              ws->var("fpm")->setVal(0.991401);
+              ws->var("fLiving")->setVal(0.340025);
+              ws->var("fbkgCtTot")->setVal(0.565982);
+              ws->var("lambdap")->setVal(0.201516);
+              ws->var("lambdam")->setVal(0.276386);
+              ws->var("lambdasym")->setVal(0.0867955);
+            } else if (inOpt.cmin == 0 && inOpt.cmax == 100) {
+              ws->var("fpm")->setVal(0.9999);
+              ws->var("fLiving")->setVal(0.808347);
+              ws->var("fbkgCtTot")->setVal(0.785043);
+              ws->var("lambdap")->setVal(0.114466);
+              ws->var("lambdam")->setVal(0.245654);
+              ws->var("lambdasym")->setVal(0.343403);
+            } else if (inOpt.cmin == 40 && inOpt.cmax == 50) {
               ws->var("fpm")->setVal(0.098713);
               ws->var("fLiving")->setVal(0.92529);
               ws->var("fbkgCtTot")->setVal(0.16331);
@@ -1380,20 +1453,33 @@ int main (int argc, char* argv[]) {
               ws->var("lambdap")->setVal(0.4052);
               ws->var("lambdam")->setVal(0.4406);
               ws->var("lambdasym")->setVal(0.098);
+            } else if (inOpt.cmin == 10 && inOpt.cmax == 60 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
+              ws->var("fpm")->setVal(1);
+              ws->var("fLiving")->setVal(0.773816);
+              ws->var("fbkgCtTot")->setVal(0.800519);
+              ws->var("lambdap")->setVal(0.0980537);
+              ws->var("lambdam")->setVal(0.0131237);
+              ws->var("lambdasym")->setVal(0.231617);
             } else if (inOpt.cmin == 10 && inOpt.cmax == 60) {
-              ws->var("fpm")->setVal(0.85682);
-              ws->var("fLiving")->setVal(0.560784);
-              ws->var("fbkgCtTot")->setVal(0.792708);
-              ws->var("lambdap")->setVal(0.174721);
-              ws->var("lambdam")->setVal(0.387958);
-              ws->var("lambdasym")->setVal(0.119817);
+              ws->var("fpm")->setVal(1);
+              ws->var("fLiving")->setVal(0.585);
+              ws->var("fbkgCtTot")->setVal(0.7386);
+              ws->var("lambdap")->setVal(0.146);
+              ws->var("lambdam")->setVal(0.0144);
+              ws->var("lambdasym")->setVal(0.068);
             } else if (inOpt.cmin==30 && inOpt.cmax==60 && inOpt.psmin==0.393 && inOpt.psmax==0.785){
-              ws->var("fpm")->setVal(0.6725);
+/*              ws->var("fpm")->setVal(0.6725);
               ws->var("fLiving")->setVal(0.9999);
               ws->var("fbkgCtTot")->setVal(0.773);
               ws->var("lambdap")->setVal(0.53);
               ws->var("lambdam")->setVal(0.2365);
               ws->var("lambdasym")->setVal(0.02);
+*/              ws->var("fpm")->setVal(1);
+              ws->var("fLiving")->setVal(0.95415);
+              ws->var("fbkgCtTot")->setVal(0.66437);
+              ws->var("lambdap")->setVal(0.11857);
+              ws->var("lambdam")->setVal(0.0073266);
+              ws->var("lambdasym")->setVal(0.14165);
             } else {
               ws->var("fpm")->setVal(0.57);
               ws->var("fLiving")->setVal(0.92);
@@ -1404,7 +1490,35 @@ int main (int argc, char* argv[]) {
             }
           } // end of setting for 3-6.5
         } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          if (inOpt.cmin==0 && inOpt.cmax==10) {
+          if (inOpt.doWeight == 1 && inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.000 && inOpt.psmax==0.393) {
+            ws->var("fpm")->setVal(0.999998);
+            ws->var("fLiving")->setVal(0.385604);
+            ws->var("fbkgCtTot")->setVal(0.490384);
+            ws->var("lambdap")->setVal(0.187418);
+            ws->var("lambdam")->setVal(0.0823106);
+            ws->var("lambdasym")->setVal(0.0678111);
+          } else if (inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
+            ws->var("fpm")->setVal(0.677);
+            ws->var("fLiving")->setVal(0.999);
+            ws->var("fbkgCtTot")->setVal(0.527);
+            ws->var("lambdap")->setVal(0.157);
+            ws->var("lambdam")->setVal(0.0486);
+            ws->var("lambdasym")->setVal(0.22);
+          } else if (inOpt.doWeight==1 && inOpt.cmin==0 && inOpt.cmax==100) {
+            ws->var("fpm")->setVal(0.59918);
+            ws->var("fLiving")->setVal(0.59259);
+            ws->var("fbkgCtTot")->setVal(0.52844);
+            ws->var("lambdap")->setVal(0.1808);
+            ws->var("lambdam")->setVal(0.0076025);
+            ws->var("lambdasym")->setVal(0.098186);
+          } else if (inOpt.cmin==0 && inOpt.cmax==10) {
+            ws->var("fpm")->setVal(0.56);
+            ws->var("fLiving")->setVal(0.92);
+            ws->var("fbkgCtTot")->setVal(0.80);
+            ws->var("lambdap")->setVal(0.16);
+            ws->var("lambdam")->setVal(0.087);
+            ws->var("lambdasym")->setVal(0.89);
+          } else if (inOpt.cmin==10 && inOpt.cmax==20) {
             ws->var("fpm")->setVal(0.56);
             ws->var("fLiving")->setVal(0.92);
             ws->var("fbkgCtTot")->setVal(0.80);
@@ -1435,6 +1549,13 @@ int main (int argc, char* argv[]) {
             ws->var("lambdap")->setVal(0.1802);
             ws->var("lambdam")->setVal(0.1176);
             ws->var("lambdasym")->setVal(0.0292);
+          } else if (inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==1.178 && inOpt.psmax==1.571) {
+            ws->var("fpm")->setVal(0.873);
+            ws->var("fLiving")->setVal(0.339);
+            ws->var("fbkgCtTot")->setVal(0.0142);
+            ws->var("lambdap")->setVal(0.1581);
+            ws->var("lambdam")->setVal(0.141);
+            ws->var("lambdasym")->setVal(0.0261);
           }  // end of setting for 1.6-2.4 & 6.5-30
         } else if (inOpt.ymin==2.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30)  {
           ws->var("fpm")->setVal(0.56);
@@ -1467,13 +1588,13 @@ int main (int argc, char* argv[]) {
 
       if (inOpt.isPEE == 0 || (inOpt.isPEE == 1 && inOpt.ctauBackground == 0)) {
         ws->var("fpm")->setConstant(kTRUE);
-//        ws->var("fpm2")->setConstant(kTRUE);
         ws->var("fLiving")->setConstant(kTRUE);
         ws->var("fbkgCtTot")->setConstant(kTRUE);
         ws->var("lambdap")->setConstant(kTRUE);
-//        ws->var("lambdap2")->setConstant(kTRUE);
         ws->var("lambdam")->setConstant(kTRUE);
         ws->var("lambdasym")->setConstant(kTRUE);
+        if (ws->var("fpm2")) ws->var("fpm2")->setConstant(kTRUE);
+        if (ws->var("lambdap2")) ws->var("lambdap2")->setConstant(kTRUE);
 
       } else if ((inOpt.isPEE == 1 && inOpt.ctauBackground == 1) || (inOpt.isPEE == 1 && inOpt.ctauBackground == 2)) {
         ws->var("fpmL")->setConstant(kTRUE);
@@ -1499,6 +1620,7 @@ int main (int argc, char* argv[]) {
             if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
             if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
+//              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
               if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
               if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
               ws->var("Bfrac")->setVal(0.05);
@@ -1518,6 +1640,10 @@ int main (int argc, char* argv[]) {
               if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);//modified_141113
               if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);//modified_141113
               ws->var("Bfrac")->setVal(0.05);
+            } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
+              if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kFALSE);
+              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
+              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
             } else {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
               if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
@@ -1751,14 +1877,16 @@ int main (int argc, char* argv[]) {
   }
   if (inOpt.ctauBackground == 0) {
     outputFile
-    << "fpm "          << ws->var("fpm")->getVal()          << " " << ws->var("fpm")->getError() << "\n"
-//    << "fpm2 "         << ws->var("fpm2")->getVal()         << " " << ws->var("fpm2")->getError() << "\n"
-    << "fLiving "      << ws->var("fLiving")->getVal()      << " " << ws->var("fLiving")->getError() << "\n"
+    << "fpm "          << ws->var("fpm")->getVal()          << " " << ws->var("fpm")->getError() << "\n";
+    if (ws->var("fpm2"))
+      outputFile << "fpm2 "         << ws->var("fpm2")->getVal()         << " " << ws->var("fpm2")->getError() << "\n";
+    outputFile << "fLiving "      << ws->var("fLiving")->getVal()      << " " << ws->var("fLiving")->getError() << "\n"
     << "fbkgCtTot "    << ws->var("fbkgCtTot")->getVal()    << " " << ws->var("fbkgCtTot")->getError() << "\n"
     << "lambdam "      << ws->var("lambdam")->getVal()      << " " << ws->var("lambdam")->getError() << "\n"
-    << "lambdap "      << ws->var("lambdap")->getVal()      << " " << ws->var("lambdap")->getError() << "\n"
-//    << "lambdap2 "     << ws->var("lambdap2")->getVal()     << " " << ws->var("lambdap2")->getError() << "\n"
-    << "lambdasym "    << ws->var("lambdasym")->getVal()    << " " << ws->var("lambdasym")->getError() << "\n";
+    << "lambdap "      << ws->var("lambdap")->getVal()      << " " << ws->var("lambdap")->getError() << "\n";
+    if (ws->var("lambdap2"))
+      outputFile << "lambdap2 "     << ws->var("lambdap2")->getVal()     << " " << ws->var("lambdap2")->getError() << "\n";
+    outputFile << "lambdasym "    << ws->var("lambdasym")->getVal()    << " " << ws->var("lambdasym")->getError() << "\n";
   } else if (inOpt.ctauBackground == 1 || inOpt.ctauBackground == 2) {
     outputFile
     << "sigmaResSigN " << ws->var("sigmaResSigN")->getVal() << " " << ws->var("sigmaResSigN")->getError() << "\n"
@@ -2050,7 +2178,7 @@ void formTitle(InputOpt &opt, double cmin, double cmax) {
     // Use for pbpb data set
     sprintf(opt.cmspre,"CMS Preliminary");
     sprintf(opt.beamEn,"PbPb  #sqrt{s_{NN}} = 2.76 TeV");
-    sprintf(opt.lumi,"L_{int} = 150 #mub^{-1}");
+    sprintf(opt.lumi,"L_{int} = 166 #mub^{-1}");
     double intMin, intMax;
     double fracMin = modf(cmin,&intMin);
     double fracMax = modf(cmax,&intMax);
@@ -2063,7 +2191,7 @@ void formTitle(InputOpt &opt, double cmin, double cmax) {
     // Use for pp data set
     sprintf(opt.cmspre,"CMS Preliminary");
     sprintf(opt.beamEn,"pp  #sqrt{s} = 2.76 TeV");
-    sprintf(opt.lumi,"L_{int} = 5.3 pb^{-1}");
+    sprintf(opt.lumi,"L_{int} = 5.4 pb^{-1}");
 
   } else if (opt.isPbPb == 2) {
     // Use for pPb data set
@@ -2914,6 +3042,12 @@ void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist
   TCanvas c0;
 //  c0.Clear(); errframe->Draw();
   c0.Clear(); c0.SetLogy(1); errframe->Draw();
+  TLatex *t = new TLatex();  t->SetNDC();  t->SetTextAlign(12);
+  t->SetTextSize(0.035);
+  t->DrawLatex(0.62,0.89,opt.rapString);
+  t->DrawLatex(0.62,0.84,opt.ptString);
+  if (opt.isPbPb != 0) t->DrawLatex(0.62,0.80,opt.centString);
+  t->DrawLatex(0.62,0.74,opt.dphiString);
   titlestr = opt.dirPre + "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_testErrPdfBkg_Log.pdf";
   c0.SaveAs(titlestr.c_str());
   errframe->Write();
@@ -2928,6 +3062,11 @@ void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist
    
 //  c0.Clear(); errframe->Draw();
   c0.Clear(); c0.SetLogy(1); errframe->Draw();
+  t->SetTextSize(0.035);
+  t->DrawLatex(0.62,0.89,opt.rapString);
+  t->DrawLatex(0.62,0.84,opt.ptString);
+  if (opt.isPbPb != 0) t->DrawLatex(0.62,0.80,opt.centString);
+  t->DrawLatex(0.62,0.74,opt.dphiString);
   titlestr = opt.dirPre + "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_testErrPdfSig_Log.pdf";
   c0.SaveAs(titlestr.c_str());
   errframe->Write();
@@ -2944,6 +3083,7 @@ void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist
   titlestr = dirPre + "_rap" + yrange + "_pT" + prange + "_cent" + crange + "_dPhi" + phirange + "_testErrPdfSigDetail_Log.pdf";
   c0.SaveAs(titlestr.c_str());*/
 
+  delete t;
 }
 
 void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooPlot *tframePR, InputOpt &opt) {
@@ -2960,19 +3100,23 @@ void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooPlot *tframePR, InputOpt
   t->SetTextSize(0.04);
   TCanvas c00; c00.cd(); tframePR->Draw();
   sprintf(reduceDS,"#sigma(G_{N}): %.2f",ws->var("sigmaResSigN")->getVal());
-  t->DrawLatex(0.5,0.55,reduceDS);
+  t->DrawLatex(0.19,0.90,reduceDS);
   double fracGn;
   if ((!opt.oneGaussianResol && opt.isPEE == 1) || opt.isPEE == 0) {
     sprintf(reduceDS,"#sigma(G_{W}): %.2f",ws->var("sigmaResSigW")->getVal());
-    t->DrawLatex(0.5,0.5,reduceDS);
+    t->DrawLatex(0.19,0.85,reduceDS);
     if (opt.isPEE == 1) {
       sprintf(reduceDS,"frac(G_{W}): %.2f",ws->var("fracRes")->getVal());
     } else if (opt.isPEE == 0) {
       fracGn= (1-(ws->var("fracRes")->getVal()+ws->var("fracRes2")->getVal()+ws->var("fracRes3")->getVal()));
       sprintf(reduceDS,"frac(G_{N}): %.2f",fracGn);
     }
-    t->DrawLatex(0.5,0.45,reduceDS);
+    t->DrawLatex(0.19,0.8,reduceDS);
   }
+  t->DrawLatex(0.63,0.9,opt.rapString);
+  t->DrawLatex(0.63,0.85,opt.ptString);
+  if (opt.isPbPb != 0) t->DrawLatex(0.63,0.8,opt.centString);
+  t->DrawLatex(0.63,0.74,opt.dphiString);
   if (fitMC)
     titlestr = opt.dirPre + "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_resolInit_Lin.pdf";
   else
@@ -2981,18 +3125,22 @@ void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooPlot *tframePR, InputOpt
   
   c00.Clear(); c00.SetLogy(1); tframePR->Draw();
   sprintf(reduceDS,"#sigma(G_{N}): %.2f",ws->var("sigmaResSigN")->getVal());
-  t->DrawLatex(0.5,0.55,reduceDS);
+  t->DrawLatex(0.5,0.6,reduceDS);
   if ((!opt.oneGaussianResol && opt.isPEE == 1) || opt.isPEE == 0) {
     sprintf(reduceDS,"#sigma(G_{W}): %.2f",ws->var("sigmaResSigW")->getVal());
-    t->DrawLatex(0.5,0.5,reduceDS);
+    t->DrawLatex(0.5,0.55,reduceDS);
     if (opt.isPEE == 1) {
       sprintf(reduceDS,"frac(G_{W}): %.2f",ws->var("fracRes")->getVal());
     } else if (opt.isPEE == 0) {
       fracGn = (1-(ws->var("fracRes")->getVal()+ws->var("fracRes2")->getVal()+ws->var("fracRes3")->getVal()));
       sprintf(reduceDS,"frac(G_{N}): %.2f",fracGn);
     }
-    t->DrawLatex(0.5,0.45,reduceDS);
+    t->DrawLatex(0.5,0.5,reduceDS);
   }
+  t->DrawLatex(0.44,0.45,opt.rapString);
+  t->DrawLatex(0.44,0.4,opt.ptString);
+  if (opt.isPbPb != 0) t->DrawLatex(0.44,0.35,opt.centString);
+  t->DrawLatex(0.44,0.29,opt.dphiString);
   if (fitMC)
     titlestr = opt.dirPre + "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_resolInit_Log.pdf";
   else
@@ -3179,9 +3327,14 @@ void drawCtauSBPlots(RooWorkspace *ws, RooDataSet *redDataSB, RooDataSet *redDat
     t->DrawLatex(0.62,0.66,opt.dphiString);
 
     leg11.SetX1NDC(0.62);
-    leg11.SetY1NDC(0.55);
     leg11.SetX2NDC(0.92);
-    leg11.SetY2NDC(0.65);
+    if (opt.usedPhi) {
+      leg11.SetY1NDC(0.50);
+      leg11.SetY2NDC(0.60);
+    } else {
+      leg11.SetY1NDC(0.55);
+      leg11.SetY2NDC(0.65);
+    }
     leg11.Draw("same");
 
     pad2a->cd(); tframepull->Draw();
