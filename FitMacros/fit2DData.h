@@ -33,6 +33,7 @@
 #include "RooFitResult.h"
 #include "RooPlot.h"
 #include "RooConstVar.h"
+#include "RooKeysPdf.h"
 
 using namespace std;
 using namespace RooFit;
@@ -91,13 +92,13 @@ int readCtauErrRange(InputOpt &opt, double *errmin, double *errmax) ;
 
 // Define essential fit functions
 void setWSRange(RooWorkspace *ws, double lmin, double lmax, double errmin, double errmax);
-RooBinning setCtBinning(double lmin,double lmax);
+RooBinning setCtBinning(InputOpt &opt);
 void defineMassBkg(RooWorkspace *ws);
 void defineMassSig(RooWorkspace *ws, InputOpt &opt);
 void getMCTrueLifetime(RooWorkspace *ws, RooDataSet *redMCCutNP, string titlestr, double lmax, InputOpt &opt);
 void defineCTResol(RooWorkspace *ws, InputOpt &opt);
 void defineCTBkg(RooWorkspace *ws, InputOpt &opt);
-void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCutNP, string titlestr, double lmax, InputOpt &opt);
+void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCut, RooDataSet *redMCCutNP, string titlestr, double lmax, InputOpt &opt);
 RooDataHist* subtractSidebands(RooWorkspace* ws, RooDataHist* subtrData, RooDataHist* all, RooDataHist* side, double scalefactor, string varName);
 
 // Drawing functions: Plotting
@@ -217,12 +218,13 @@ void defineCTBkg(RooWorkspace *ws, InputOpt &opt) {
     ws->factory("Decay::bkg3(Jpsi_Ct,lambdam[0.79,0.001,1.5],sigPR,RooDecay::Flipped)");
 //    ws->factory("Decay::bkg3(Jpsi_Ct,lambdam[0.79,0.02,1.5],sigPR,RooDecay::Flipped)");
     ws->factory("Decay::bkg4(Jpsi_Ct,lambdasym[0.69,0.02,5.0],sigPR,RooDecay::DoubleSided)");
-//    ws->factory("Decay::bkg5(Jpsi_Ct,lambdap2[2.0,1.0,5.5],sigPR,RooDecay::SingleSided)");
+//    ws->factory("Decay::bkg5(Jpsi_Ct,lambdap2[2.0,0.1,5.5],sigPR,RooDecay::SingleSided)");
 
-/*    ws->factory("SUM::bkgPart1(fpm[1.0,0.0,1.0]*bkg2,bkg5)");
-    ws->factory("SUM::bkgPart2(fpm2[0.9,0.0,1.0]*bkgPart1,bkg3)");
-    ws->factory("SUM::bkgPart3(fLiving[0.9,0.0,1.0]*bkgPart2,bkg4)");
-    ws->factory("SUM::bkgCtTot(fbkgCtTot[0.29,0.0,1.0]*sigPR,bkgPart2)");*/
+//    ws->factory("SUM::bkgPart1(fpm[1.0,0.0,1.0]*bkg2,bkg5)");
+//    ws->factory("SUM::bkgPart2(fpm2[0.9,0.0,1.0]*bkgPart1,bkg3)");
+//    ws->factory("SUM::bkgPart3(fLiving[0.9,0.0,1.0]*bkgPart2,bkg4)");
+//    ws->factory("SUM::bkgCtTot(fbkgCtTot[0.29,0.0,1.0]*sigPR,bkgPart3)");
+//    ws->factory("SUM::bkgCtTot(fbkgCtTot[0.29,0.0,1.0]*sigPR,bkgPart2)");
 
     ws->factory("SUM::bkgPart1(fpm[1.0,0.0,1.0]*bkg2,bkg3)");
     ws->factory("SUM::bkgPart2(fLiving[0.9,0.0,1.0]*bkgPart1,bkg4)");
@@ -411,7 +413,7 @@ void getMCTrueLifetime(RooWorkspace *ws, RooDataSet *redMCCutNP, string titlestr
   return ;
 }
 
-void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCutNP, string titlestr, double lmax, InputOpt &opt) {
+void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCut, RooDataSet *redMCCutNP, string titlestr, double lmax, InputOpt &opt) {
   RooDataHist* binMCCutNP = new RooDataHist("binMCCutNP","MC distribution for NP signal",RooArgSet(*(ws->var("Jpsi_CtTrue"))),*redMCCutNP);
   
   if (opt.isPEE == 0) {
@@ -503,13 +505,40 @@ void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCutNP, string titlestr, doub
         ws->factory("Decay::sigNP(Jpsi_Ct,bTau,bresG,RooDecay::SingleSided)");
       } // end of isPbPb
 
-    } else {
+    } else { // not analytic b lifetime
       if (opt.oneGaussianResol) {
         RooHistPdfConv sigNP("sigNP","Non-prompt signal with narrow gaussian",*(ws->var("Jpsi_Ct")),*(ws->var("meanResSigW")),*(ws->var("sigmaResSigN")),*(ws->var("one")),*(ws->var("Jpsi_CtErr")),*binMCCutNP);  ws->import(sigNP);
       } else {
-        RooHistPdfConv sigNPW("sigNPW","Non-prompt signal with wide gaussian",*(ws->var("Jpsi_Ct")),*(ws->var("meanResSigW")),*(ws->var("sigmaResSigW")),*(ws->var("one")),*(ws->var("Jpsi_CtErr")),*binMCCutNP);  ws->import(sigNPW);
-        RooHistPdfConv sigNPN("sigNPN","Non-prompt signal with narrow gaussian",*(ws->var("Jpsi_Ct")),*(ws->var("meanResSigW")),*(ws->var("sigmaResSigN")),*(ws->var("one")),*(ws->var("Jpsi_CtErr")),*binMCCutNP);  ws->import(sigNPN);
-        RooAddPdf sigNP("sigNP","Non-prompt signal",RooArgSet(*(ws->pdf("sigNPW")),*(ws->pdf("sigNPN"))),RooArgSet(*(ws->var("fracRes"))));  ws->import(sigNP); 
+//        RooHistPdfConv sigNPW("sigNPW","Non-prompt signal with wide gaussian",*(ws->var("Jpsi_Ct")),*(ws->var("meanResSigW")),*(ws->var("sigmaResSigW")),*(ws->var("one")),*(ws->var("Jpsi_CtErr")),*binMCCutNP);  ws->import(sigNPW);
+//        RooHistPdfConv sigNPN("sigNPN","Non-prompt signal with narrow gaussian",*(ws->var("Jpsi_Ct")),*(ws->var("meanResSigW")),*(ws->var("sigmaResSigN")),*(ws->var("one")),*(ws->var("Jpsi_CtErr")),*binMCCutNP);  ws->import(sigNPN);
+//        RooAddPdf sigNP("sigNP","Non-prompt signal",RooArgSet(*(ws->pdf("sigNPW")),*(ws->pdf("sigNPN"))),RooArgSet(*(ws->var("fracRes"))));  ws->import(sigNP); 
+        
+        // With RooKeysPdf
+//        RooKeysPdf sigNPHist("sigNPHist","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorBoth);  ws->import(sigNPHist);
+//        RooFFTConvPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*(ws->pdf("sigNPHist")),*(ws->pdf("sigPR")));  ws->import(sigNP);
+
+//        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorBoth);  ws->import(sigNP);
+        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorLeftAsymRight);  ws->import(sigNP);
+
+        RooPlot *trueframef = ws->var("Jpsi_Ct")->frame(Bins(150));
+        redMCCut->plotOn(trueframef);
+        ws->pdf("sigNP")->plotOn(trueframef,LineColor(kBlue),Normalization(redMCCut->sumEntries(),RooAbsReal::NumEvent));
+
+        char titlestr_lin[512];
+
+        TLatex t;
+        t.SetNDC(); t.SetTextAlign(22); t.SetTextSize(0.035);
+
+        TCanvas c0f;
+
+        c0f.cd(); c0f.SetLogy(0); trueframef->Draw();
+        sprintf(titlestr_lin,"%s_Lin.pdf",titlestr.c_str());
+        c0f.SaveAs(titlestr_lin);
+
+        c0f.Clear(); c0f.SetLogy(1); trueframef->Draw();
+        sprintf(titlestr_lin,"%s_Log.pdf",titlestr.c_str());
+        c0f.SaveAs(titlestr_lin);
+
       }
     }
 

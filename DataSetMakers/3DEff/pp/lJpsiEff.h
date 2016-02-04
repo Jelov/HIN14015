@@ -16,6 +16,7 @@
 #include <TFitResult.h>
 #include <TGraphAsymmErrors.h>
 #include <TGraph2DErrors.h>
+#include <TMinuit.h>
 #include <TFile.h>
 #include <TTree.h>
 #include <TCanvas.h>
@@ -71,7 +72,7 @@ double fitErfPol2(double *x, double *par) {
 }
 
 double fitErfPol1(double *x, double *par) {
-    double erf1 = TMath::Erf((x[1]-par[3])/par[4]); // for pT
+    double erf1 = par[5]*TMath::Erf((x[1]-par[3])/par[4]); // for pT
     double pol1 = (x[0]-par[0])/par[1]+par[2]; // for rap
     double result = erf1*pol1;
     return result;
@@ -231,6 +232,8 @@ class Eff3DMC {
     TH1D *h1DGenPtFit[100], *h1DRecPtFit[100], *h1DEffPtFit[100], *h1DMeanPtFit[100][20];
     TF1 *f1DEffPtFit[100];
     TGraphAsymmErrors *g1DEffPtFit[100];
+    TFitResult *fr1DEffPtFit[100];
+    TGraph *gc01_1DEffPtFit[100], *gc02_1DEffPtFit[100], *gc12_1DEffPtFit[100];
     // Cent histo (integrated over all other variables)
     TH1D *h1DGenCent, *h1DRecCent, *h1DEffCent;
 
@@ -348,6 +351,7 @@ Eff3DMC::~Eff3DMC() {
       delete h1DRecPtFit[nidx];
       delete h1DEffPtFit[nidx];
       delete f1DEffPtFit[nidx];
+      delete fr1DEffPtFit[nidx];
       delete g1DEffPtFit[nidx];
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
       if (a == nbinsy2-2) {
@@ -666,7 +670,7 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
         ptarray2or3[b] = ptarray2[b];
       }
     }
-    
+   
     cout << "CreateHistos (h2DGenRapPtFit): nidx " <<  nidx << " " << c << " " ;
     h2DGenRapPtFit[nidx] = new TH2D(
         Form("h2DGenRapPt_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,centmin,centmax),
@@ -679,11 +683,10 @@ void Eff3DMC::CreateHistos(const int _nbinsy, const double *yarray, const int _n
         ";Rapidity;p_{T} (GeV/c)",nbinsy2-1,yarray2,nbinspt2or3-1,ptarray2or3);
 
     const string fitErfPol12= "(((x-[0])/[1]+[2])*(y<6.5&&TMath::Abs(x)>=1.6) + ((x-[0])/[5]+[6])*(y>=6.5)) * TMath::Erf((y-[3])/[4])";
-//    f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitErfPol12.c_str(),_ymin,_ymax,_ptmin,_ptmax);
     if (_ptmax<=6.5 && isPbPb) 
       f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitPol12D,_ymin,_ymax,_ptmin,_ptmax,4);
     else
-      f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitErfPol1,_ymin,_ymax,_ptmin,_ptmax,5);
+      f2DEffRapPtFit[nidx] = new TF2(Form("%s_TF",h2DEffRapPtFit[nidx]->GetName()),fitErfPol1,_ymin,_ymax,_ptmin,_ptmax,6);
     cout << endl;
   }
 
@@ -1287,12 +1290,12 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
       if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
         f2DEffRapPtFit[nidx]->SetParameters(1.7,3.3,-0.5,2.5,-6);
       } else if (_ymin==1.6 && _ymax==2.4 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
-        f2DEffRapPtFit[nidx]->SetParameters(1,-1,-9,1.5,-3);
+        f2DEffRapPtFit[nidx]->SetParameters(2,2.4,0.4,0.5,2.9,6);
 //        f2DEffRapPtFit[nidx]->SetParameters(2.1,-3.2,0.6,1.5,-15);
       } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=6.5) {
         f2DEffRapPtFit[nidx]->SetParameters(1.7,-3.3,-0.5,2.5,-6);
       } else if (_ymin==-2.4 && _ymax==-1.6 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)<6.5 && f2DEffRapPtFit[nidx]->GetYaxis()->GetBinCenter(1)>=3) {
-        f2DEffRapPtFit[nidx]->SetParameters(2.1,3.2,0.6,1.5,-15);
+        f2DEffRapPtFit[nidx]->SetParameters(2,-2.4,0.4,0.5,2.9,6);
       } else {
         f2DEffRapPtFit[nidx]->SetParameters(0.8,0.5,1.0,2.5,-8,0,-0.6);
       }
@@ -1406,9 +1409,7 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
             f1DEffPtFit[nidx]->SetParameters(0.6,4,5.7);
           } else if (ymin==-2.0 && ymax==-1.6 && centmin==8 && centmax==12) {
             f1DEffPtFit[nidx]->SetParameters(0.5,2,5.7);
-          } else if (ymin==-2.4 && ymax==-2.0 && centmin==0 && centmax==4) {
-            f1DEffPtFit[nidx]->SetParameters(0.3,3,4.7);
-          } else if (ymin==-2.4 && ymax==-2.0 && centmin==4 && centmax==8) {
+          } else if (ymin==-2.4 && ymax==-2.0 && centmin>=0 && centmax<=8) {
             f1DEffPtFit[nidx]->SetParameters(0.3,3,4.7);
           } else if (ymin==-2.4 && ymax==-2.0 && centmin==12 && centmax==24) {
             f1DEffPtFit[nidx]->SetParameters(0.3,1.2,2.4);
@@ -1445,16 +1446,23 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
         }
       }
 
-      TFitResultPtr res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R L S");
+      TFitResultPtr res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R S");
       int counter=0;
       if (0 != res->Status()) {
         while (1) {
           counter++;
-          res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R L S");
+          res = g1DEffPtFit[nidx]->Fit(Form("%s_TF",h1DEffPtFit[nidx]->GetName()),"R S");
           if (0 == res->Status() || counter > 20) break;
         }
       }
-     
+      fr1DEffPtFit[nidx] = new TFitResult(*res);
+      gMinuit->SetErrorDef(1); //1sigma
+      gc01_1DEffPtFit[nidx] = (TGraph*)gMinuit->Contour(80,0,1);
+      gc02_1DEffPtFit[nidx] = (TGraph*)gMinuit->Contour(80,0,2);
+      gc12_1DEffPtFit[nidx] = (TGraph*)gMinuit->Contour(80,1,2);
+      gc01_1DEffPtFit[nidx]->SetName(Form("%s_gc01",h1DEffPtFit[nidx]->GetName()));
+      gc02_1DEffPtFit[nidx]->SetName(Form("%s_gc02",h1DEffPtFit[nidx]->GetName()));
+      gc12_1DEffPtFit[nidx]->SetName(Form("%s_gc12",h1DEffPtFit[nidx]->GetName()));
 
     }
   } // end of 1D pT eff fitting
@@ -1509,12 +1517,12 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
 
 
 
-      TFitResultPtr res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R L S"); // 0: Fit stored, but not drawn
+      TFitResultPtr res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R S"); // 0: Fit stored, but not drawn
       int counter=0;
       if (0 != res->Status()) {
         while (1) {
           counter++;
-          res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R L S");
+          res = g1DEffRapFit[nidx]->Fit(Form("%s_TF",h1DEffRapFit[nidx]->GetName()),"R S");
           if (0 == res->Status() || counter > 20) break;
         }
       }
@@ -1564,7 +1572,11 @@ void Eff3DMC::SaveHistos(string str, const int _nbinsy2, const double *yarray2) 
       h1DRecPtFit[nidx]->Write();
       h1DEffPtFit[nidx]->Write();
       f1DEffPtFit[nidx]->Write();
+      fr1DEffPtFit[nidx]->Write();
       g1DEffPtFit[nidx]->Write();
+      gc01_1DEffPtFit[nidx]->Write();
+      gc02_1DEffPtFit[nidx]->Write();
+      gc12_1DEffPtFit[nidx]->Write();
       // To avoid bad quality pT eff curve, reduce number of pT bins for PbPb in 2<|y|<2.4
       if (isForward(yarray2[a],yarray2[a+1])) {
         for (int b=0; b<nbinspt3-1; b++) {

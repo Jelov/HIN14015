@@ -20,10 +20,15 @@
 #include "TLine.h"
 
 using namespace std;
+bool drawFitCurve = false;
 
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
-//  if (ptmax<=6.5) return true;
-  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
+  if ( (ptmax<=6.5 && ymin>=1.6 && ymax<=2.4) ||
+       (ptmax<=6.5 && ymin>=-2.4 && ymax<=-1.6) ||
+       (ptmax<9 && ymin>=0 && ymax<=1.2) ||
+       (ptmax<9 && ymin>=-1.2 && ymax<=0) 
+     ) return true;
+//  if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
   else return false;
 return false;
 }
@@ -233,7 +238,7 @@ void SuperImposeRatio(TH1D *heffProf[], TH1D *heffSimUnf[], TH1D *heffRatio[], c
       if (absRapidity) lat->DrawLatex(0.2,0.93,Form("%.1f<|y|<%.1f",raparr[a],raparr[a+1]));
       else lat->DrawLatex(0.2,0.93,Form("%.1f<y<%.1f",raparr[a],raparr[a+1]));
       if (isPbPb) lat->DrawLatex(0.2,0.88,Form("Cent. %.0f-%.0f%%",centarr[c]*2.5,centarr[c+1]*2.5));
-      line->DrawLine(0,0,3,0);
+      line->DrawLine(0,0,10,0);
 
       canv.SaveAs(Form("./eff_Rap%.1f-%.1f_Cent%d-%d.pdf",raparr[a],raparr[a+1],centarr[c],centarr[c+1]));
       canv.SaveAs(Form("./eff_Rap%.1f-%.1f_Cent%d-%d.png",raparr[a],raparr[a+1],centarr[c],centarr[c+1]));
@@ -741,23 +746,31 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
     for (unsigned int b=0; b<nbinspt; b++) {
       double ptmin=ptarray[b]; double ptmax=ptarray[b+1];
 
-      TCanvas *canvNP = new TCanvas("canvNP","c",600,800);
+      TCanvas *canvNP;
+      if (drawFitCurve)
+        canvNP = new TCanvas("canvNP","c",600,800);
+      else
+        canvNP = new TCanvas("canvNP","c",600,600);
       canvNP->Draw();
-      TPad *pUp = new TPad("padup","padup",0.03,0.35,0.97,0.97);
-      pUp->SetBottomMargin(0);
-      pUp->SetRightMargin(0.02);
-      pUp->SetLeftMargin(0.10);
-      pUp->Draw();
-      TPad *pDown = new TPad("paddown","paddown",0.03,0.03,0.97,0.35);
-      pDown->SetTopMargin(0);
-      pDown->SetBottomMargin(0.21);
-      pDown->SetRightMargin(0.02);
-      pDown->SetLeftMargin(0.10);
-      pDown->Draw();
+      TPad *pUp;
+      TPad *pDown;
+      if (drawFitCurve) {
+        pUp = new TPad("padup","padup",0.03,0.35,0.97,0.97);
+        pUp->SetBottomMargin(0);
+        pUp->SetRightMargin(0.02);
+        pUp->SetLeftMargin(0.10);
+        pUp->Draw();
+        pDown = new TPad("paddown","paddown",0.03,0.03,0.97,0.35);
+        pDown->SetTopMargin(0);
+        pDown->SetBottomMargin(0.21);
+        pDown->SetRightMargin(0.02);
+        pDown->SetLeftMargin(0.10);
+        pDown->Draw();
+      }
      
       TLegend *leg = new TLegend(0.20,0.73,0.63,0.83);
       SetLegendStyle(leg);
-      TLine *line = new TLine(0,0,3,0);
+      TLine *line = new TLine(0,0,5,0);
       int colorArr[] = {kRed+1, kSpring+4, kAzure+1, kBlue+2, kMagenta, kMagenta+2};
       TF1 *fitf[100];
       TGraph *gpull[100];
@@ -783,52 +796,57 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
         cout << a << " " << b << " " << c << " " << ymin << " " << ymax << " " << ptmin << " " << ptmax << " "
              << centmin << " " << centmax << " " << gNPEff[i]->GetName() << " " << hNPEff[i]->GetName() << endl;
         fitf[i] = (TF1*)gNPEff[i]->GetFunction(Form("%s_TF",hNPEff[i]->GetName()));
+        fitf[i]->SetBit(TF1::kNotDraw);
         
         // Calculate a pull histogram
-        int nbins = gNPEff[i]->GetN();
-        double *arrx = gNPEff[i]->GetX();
-        double *arry = gNPEff[i]->GetY();
-        gpull[i] = new TGraph(nbins,arrx,arry);
-        gpull[i]->SetName(Form("%s_pull",hNPEff[i]->GetName()));
-        
-        for (int d=0; d<gpull[i]->GetN(); d++) {
-          double gx, gy;
-          gpull[i]->GetPoint(d,gx,gy);
-          double fitValue = fitf[i]->Eval(gx);
-          gpull[i]->SetPoint(d,gx,(fitValue-gy)/gy);
-        }
-        SetHistStyle(gpull[i],c,b,-1,1);
-        gpull[i]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
-        gpull[i]->GetYaxis()->SetTitle("(#varepsilon_{fit}-#varepsilon)/#varepsilon");
-        gpull[i]->GetXaxis()->SetLabelSize(0.09);
-        gpull[i]->GetYaxis()->SetLabelSize(0.08);
-        gpull[i]->GetXaxis()->SetTitleSize(0.09);
-        gpull[i]->GetYaxis()->SetTitleSize(0.08);
-        gpull[i]->GetXaxis()->SetTitleOffset(1.1);
-        gpull[i]->GetYaxis()->SetTitleOffset(0.6);
-        gpull[i]->GetYaxis()->SetNdivisions(10);
-        pDown->cd();
-        gpull[i]->GetXaxis()->SetLimits(0,3);
-        if (c==0) {
-          gpull[i]->Draw("pa");
-        } else {
-          gpull[i]->Draw("p");
-        }
-        line->SetLineColor(kGray+2); line->SetLineWidth(1.2); line->Draw("same");
+        if (drawFitCurve) {
+          int nbins = gNPEff[i]->GetN();
+          double *arrx = gNPEff[i]->GetX();
+          double *arry = gNPEff[i]->GetY();
+          gpull[i] = new TGraph(nbins,arrx,arry);
+          gpull[i]->SetName(Form("%s_pull",hNPEff[i]->GetName()));
+          
+          for (int d=0; d<gpull[i]->GetN(); d++) {
+            double gx, gy;
+            gpull[i]->GetPoint(d,gx,gy);
+            double fitValue = fitf[i]->Eval(gx);
+            gpull[i]->SetPoint(d,gx,(fitValue-gy)/gy);
+          }
+          SetHistStyle(gpull[i],c,b,-1,1);
+          gpull[i]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
+          gpull[i]->GetYaxis()->SetTitle("(#varepsilon_{fit}-#varepsilon)/#varepsilon");
+          gpull[i]->GetXaxis()->SetLabelSize(0.09);
+          gpull[i]->GetYaxis()->SetLabelSize(0.08);
+          gpull[i]->GetXaxis()->SetTitleSize(0.09);
+          gpull[i]->GetYaxis()->SetTitleSize(0.08);
+          gpull[i]->GetXaxis()->SetTitleOffset(1.1);
+          gpull[i]->GetYaxis()->SetTitleOffset(0.6);
+          gpull[i]->GetYaxis()->SetNdivisions(10);
+          pDown->cd();
+          gpull[i]->GetXaxis()->SetLimits(0,10);
+          if (c==0) {
+            gpull[i]->Draw("pa");
+          } else {
+            gpull[i]->Draw("p");
+          }
+          line->SetLineColor(kGray+2); line->SetLineWidth(1.2); line->Draw("same");
+          
+          fitf[i]->SetLineColor(colorArr[c]);
+          fitf[i]->SetLineWidth(2.2);
 
-        fitf[i]->SetLineColor(colorArr[c]);
-        fitf[i]->SetLineWidth(2.2);
+          pUp->cd();
+          if (c==1) fitf[i]->SetLineStyle(7);
+          else if (c==2) fitf[i]->SetLineStyle(3);
+        }
 
-        pUp->cd();
-        if (c==1) fitf[i]->SetLineStyle(7);
-        else if (c==2) fitf[i]->SetLineStyle(3);
-        gNPEff[i]->GetXaxis()->SetLimits(0,3);
+        gNPEff[i]->GetXaxis()->SetLimits(0,10);
+        if (!drawFitCurve) gNPEff[i]->GetXaxis()->SetTitle("L_{xyz} (Reco) (mm)");
         if (c==0) {
           gNPEff[i]->Draw("pa");
-          fitf[i]->Draw("same");
+          if (drawFitCurve) fitf[i]->Draw("same");
         } else {
           gNPEff[i]->Draw("p");
-          fitf[i]->Draw("same");
+          if (drawFitCurve) fitf[i]->Draw("same");
         } 
 
         std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
@@ -856,23 +874,35 @@ void LxyEff_diff3D(TGraphAsymmErrors *gNPEff[], TH1D *hNPEff[], const string tit
         int i = a*nbinspt*nbinscent + b*nbinscent + c;
         TF1 *fitf = (TF1*)gNPEff[i]->GetFunction(Form("%s_TF",hNPEff[i]->GetName()));
 
-        if (c==0) { // Draw equation for the 1st time
+        if (c==0 && drawFitCurve) { // Draw equation for the 1st time
+          pUp->cd();
           if (isPbPb) {
-            if ( TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6 ) lat->DrawLatex(0.70,0.85,Form("(p0 #times x - p1) + p2"));
+            if ( (TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) ||
+                 (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6 && ptmin>=13) ||
+                 (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6 && ptmax<=6.5)
+               )
+              lat->DrawLatex(0.70,0.85,Form("(p0 #times x - p1) + p2"));
             else lat->DrawLatex(0.68,0.85,Form("p0 #times Erf[-(x-p1)/p2] + p3"));
           } else lat->DrawLatex(0.70,0.85,Form("(p0 #times x - p1) + p2"));
         }
 
-        lat->SetTextColor(colorArr[c]);
+        if (drawFitCurve) {
+          lat->SetTextColor(colorArr[c]);
 
-        if (isPbPb) lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f, %.0f-%.0f%%",ptmin,ptmax,centmin*2.5,centmax*2.5));
-        else lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f",ptmin,ptmax));
-        lat->DrawLatex(0.70,0.77-(c*0.20),Form("#chi^{2}/ndf = %.2f / %d",fitf->GetChisquare(),fitf->GetNDF()));
-        lat->DrawLatex(0.70,0.74-(c*0.20),Form("p0 = %.2f #pm %.3f",fitf->GetParameter(0),fitf->GetParError(0)));
-        lat->DrawLatex(0.70,0.71-(c*0.20),Form("p1 = %.2f #pm %.3f",fitf->GetParameter(1),fitf->GetParError(1)));
-        lat->DrawLatex(0.70,0.68-(c*0.20),Form("p2 = %.2f #pm %.3f",fitf->GetParameter(2),fitf->GetParError(2)));
-        if (isPbPb && (TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) ) {
-          lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
+          if (isPbPb) lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f, %.0f-%.0f%%",ptmin,ptmax,centmin*2.5,centmax*2.5));
+          else lat->DrawLatex(0.70,0.815-(c*0.20),Form("p_{T} %.1f-%.1f",ptmin,ptmax));
+          
+          pUp->cd();
+          lat->DrawLatex(0.70,0.77-(c*0.20),Form("#chi^{2}/ndf = %.2f / %d",fitf->GetChisquare(),fitf->GetNDF()));
+          lat->DrawLatex(0.70,0.74-(c*0.20),Form("p0 = %.2f #pm %.3f",fitf->GetParameter(0),fitf->GetParError(0)));
+          lat->DrawLatex(0.70,0.71-(c*0.20),Form("p1 = %.2f #pm %.3f",fitf->GetParameter(1),fitf->GetParError(1)));
+          lat->DrawLatex(0.70,0.68-(c*0.20),Form("p2 = %.2f #pm %.3f",fitf->GetParameter(2),fitf->GetParError(2)));
+          if ( (TMath::Abs(ymin)<=1.6 && TMath::Abs(ymax)<=1.6) ||
+               (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6 && ptmin>=13) ||
+               (TMath::Abs(ymin)>=1.6 && TMath::Abs(ymax)>=1.6 && ptmax<=6.5)
+             ) {
+            lat->DrawLatex(0.70,0.65-(c*0.20),Form("p3 = %.2f #pm %.3f",fitf->GetParameter(3),fitf->GetParError(3)));
+          }
         }
       }
       lat->SetTextSize(0.042);
@@ -1035,15 +1065,15 @@ int main(int argc, char *argv[]) {
   const int _centforwarr_pp[]   = {0, 40};
   const double _ptarr_pbpb[]       = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _ptarr_pp[]         = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-  const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-  const double _ptforwarr_pp[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+//  const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _ptforwarr_pbpb[]   = {3.0, 5.5, 6.5, 8.5, 11, 16, 30};
+  const double _ptforwarr_pp[]     = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _raparr_abs[]       = {0.0, 1.2, 1.6};
   const double _rapforwarr_abs[]   = {1.6, 2.4};
-  const double _raparr_noabs[]     = {-1.6, 0.0, 1.6};
-  const double _rapforwarr_noabs[] = {-2.4, -1.6, 1.6, 2.4};
-  const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0}; 
-//  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0};
-  const double _ctauforwarray[]    = {0, 0.4, 0.8, 1.2, 1.6, 3.0};
+  const double _raparr_noabs[]     = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
+  const double _rapforwarr_noabs[] = {-2.4, -2.0, -1.6, 1.6, 2.0, 2.4};
+  const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0}; 
+  const double _ctauforwarray[]    = {0, 0.4, 0.8, 1.2, 1.6, 3.0, 5.0, 7.0, 10.0};
   const double recoctauarray[]     = {-2, 0, 0.5, 1, 3, 5};
   const unsigned int nbinsrecoctau = sizeof(recoctauarray)/sizeof(double) -1;
   const unsigned int nbinsforwctau = sizeof(_ctauforwarray)/sizeof(double) -1;
@@ -1109,19 +1139,19 @@ int main(int argc, char *argv[]) {
   TFile *cgenFNPR_LowPt, *cgenFNPR_ForwHighPt, *cgenFNPRMinus_LowPt, *cgenFNPRMinus_ForwHighPt;
 
   if (isPbPb) {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/RegionsDividedInEta_noTnPCorr";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/root528/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pbpb.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pbpb_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150923/lxyzTrueReco.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_0_8_12_16_20_24/lxyzTrueReco.root",dirPath.c_str());
   } else {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/RegionsDividedInEta_noTnPCorr";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root528/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pp.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pp_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/LxyzTrueReco_20150923/lxyzTrueReco.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_0_12_16_20_24/lxyzTrueReco.root",dirPath.c_str());
   }
   if (absRapidity) {
     sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
@@ -1206,7 +1236,7 @@ int main(int argc, char *argv[]) {
     cout << "effFileNominal: " << effHistname << endl;
     effFileNominal = new TFile(effHistname,"read");
  
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
     cout << "effFileNominal_LowPt: " << effHistname << endl;
     effFileNominal_LowPt = new TFile(effHistname,"read");
     
@@ -1414,7 +1444,7 @@ int main(int argc, char *argv[]) {
   TH2D *lxyTrueReco[nHistEff], *lxyTrueReco_LowPt[nHistForwEff];
   TProfile *lxyTrueReco_pfy[nHistEff], *lxyTrueReco_pfy_LowPt[nHistForwEff];
   TH1D *heffCentNom[nHistEff], *heffCentNom_LowPt[nHistForwEff];
-  TH1D *hMeanLxy[nHistEff][30], *hMeanLxy_LowPt[nHistForwEff][30];
+  TH1D *hMeanLxy[nHistEff][50], *hMeanLxy_LowPt[nHistForwEff][50];
   TH1D *heffSimUnf[nHistEff], *heffSimUnf_LowPt[nHistForwEff];
   TH1D *heffProf[nHistEff], *heffProf_LowPt[nHistForwEff];
   TH1D *heffUnf[nHistEff], *heffUnf_LowPt[nHistForwEff];
@@ -1479,20 +1509,15 @@ int main(int argc, char *argv[]) {
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         heffSimUnf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
         if (isPbPb) {
-          if (raparr[a]==1.2 && raparr[a+1]==1.6 && ptarr[b]==16 && ptarr[b+1]==30 && centarr[c]==0 && centarr[c+1]==40) {
-            feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
-          } else {
-            feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
-          }
+          feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
         } else feffSimUnf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
 
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
         heffProf[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        if (isPbPb) 
-          feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],3);
-        else
-          feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+        if (isPbPb) {
+          feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+        } else feffProf[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   raparr[a],raparr[a+1],ptarr[b],ptarr[b+1],centarr[c],centarr[c+1]);
@@ -1545,6 +1570,8 @@ int main(int argc, char *argv[]) {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
           } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
+          } else if (!absRapidity && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+            hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_ForwHighPt->Get(fitname.c_str());
           } else {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
           }
@@ -1557,6 +1584,8 @@ int main(int argc, char *argv[]) {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
         } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
+        } else if (!absRapidity && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+          heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_ForwHighPt->Get(fitname.c_str());
         } else {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
         }
@@ -1564,12 +1593,27 @@ int main(int argc, char *argv[]) {
         fitname = Form("heffSimUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
         heffSimUnf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
-        
+
+        if (isPbPb) {
+          if ( TMath::Abs(rapforwarr[a])>=1.6 && TMath::Abs(rapforwarr[a+1])<=2.4 &&
+               ((ptforwarr[b]<=6.5 && ptforwarr[b+1]<=6.5) || (ptforwarr[b]>=13 && ptforwarr[b+1]>=13)) ) {
+            feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+          } else {
+            feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+          }
+        } else feffSimUnf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+
         fitname = Form("heffProf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
         heffProf_LowPt[nidx] = new TH1D(fitname.c_str(),";L_{xyz} (Reco) (mm);Efficiency",nbinsctau,ctauarr);
-        feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+        if (isPbPb) {
+          if ( TMath::Abs(rapforwarr[a])>=1.6 && TMath::Abs(rapforwarr[a+1])<=2.4 &&
+               ((ptforwarr[b]<=6.5 && ptforwarr[b+1]<=6.5) || (ptforwarr[b]>=13 && ptforwarr[b+1]>=13)) ) {
+            feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
+          } else {
+            feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitERFXFlip,ctauarr[0],ctauarr[nbinsctau],4);
+          }
+        } else feffProf_LowPt[nidx] = new TF1(Form("%s_TF",fitname.c_str()),fitPol1,ctauarr[0],ctauarr[nbinsctau],3);
         
         fitname = Form("heffUnf_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
@@ -1711,12 +1755,21 @@ int main(int argc, char *argv[]) {
         }
 
         if (isPbPb) {
-          feffSimUnf[nidx]->SetParameters(0.5,4,8,0.2);
-          if (ymin==0.8 && ymax==1.6 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==8) {
-            feffSimUnf[nidx]->SetParameters(0.23,1.35,0.55,0.33);
-            feffSimUnf[nidx]->FixParameter(2,0.55);
-          } else if (ymin==-1.6 && ymax==-1.2 && ptmin==11 && ptmax==13 && centmin==0 && centmax==40) {
+          feffSimUnf[nidx]->SetParameters(0.136,2.533,0.731,0.342);
+          if (ymin==-1.6 && ymax==-1.2 && ptmin==6.5 && ptmax==7.5) {
+            feffSimUnf[nidx]->SetParameters(0.129,2.842,0.695,0.169);
+          } else if (ymin==-1.6 && ymax==-1.2 && ptmin==7.5 && ptmax==8.5) {
+            feffSimUnf[nidx]->SetParameters(0.140,2.071,1.273,0.293);
+          } else if (ymin==-1.6 && ymax==-1.2 && ptmin==8.5 && ptmax==9.5) {
+            feffSimUnf[nidx]->SetParameters(0.136,2.533,0.731,0.342);
+          } else if (ymin==-1.6 && ymax==-1.2 && ptmin==11 && ptmax==13) {
             feffSimUnf[nidx]->SetParameters(0.07,2.21,0.11,0.49);
+          } else if (ymin==0 && ymax==0.8 && ptmin==7.5 && ptmax==8.5) {
+            feffSimUnf[nidx]->SetParameters(0.20,1.19,0.39,0.22);
+          } else if (ymin==0.8 && ymax==1.6 && ptmin==7.5 && ptmax==8.5) {
+            feffSimUnf[nidx]->SetParameters(0.23,1.35,0.55,0.33);
+          } else if (ymin==-0.8 && ymax==0 && ptmin==7.5 && ptmax==8.5) {
+            feffSimUnf[nidx]->SetParameters(0.20,1.19,0.39,0.22);
           }
         } else {
           feffSimUnf[nidx]->SetParameters(1.1,0,0);
@@ -1735,13 +1788,13 @@ int main(int argc, char *argv[]) {
         }
 */
 
-        TFitResultPtr res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"R S EX0");
+        TFitResultPtr res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"S EX0 M");
         cout << feffSimUnf[nidx]->GetName() << endl;
         int counter=0;
         if (0 != res->Status()) {
           while (1) {
             counter++;
-            res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"R S EX0");
+            res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"S EX0 M");
             if (0==res->Status() || counter > 10) break;
           }    
         }    
@@ -1878,37 +1931,45 @@ int main(int argc, char *argv[]) {
         }
 
         if (isPbPb) {
-          feffSimUnf_LowPt[nidx]->SetParameters(1.1,0,0);
-/*          feffSimUnf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
-         if (ymin==1.6 && ymax==2.4 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.08,0.98,0.43,0.08);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,0.43);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==5.5 && ptmax==6.5 && centmin==0 && centmax==8) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.96,0.47,0.11);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,0.47);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==6.5 && ptmax==7.5 && centmin==8 && centmax==40) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.25,1.2,1.27,0.21);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==7.5 && ptmax==8.5 && centmin==0 && centmax==40) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.21,1.21,0.80,0.21);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,0.80);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==10 && ptmax==12 && centmin==0 && centmax==40) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.18,1.57,0.55,0.33);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,0.55);
-          } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3 && ptmax==4.5 && centmin==0 && (centmax==8 || centmax==40)) {
-            feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.93,0.22,0.08);
-            feffSimUnf_LowPt[nidx]->FixParameter(2,0.22);
-          }*/
+          feffSimUnf_LowPt[nidx]->SetParameters(0.136,2.533,0.731,0.342);
+          if ( TMath::Abs(rapforwarr[a])==1.6 && TMath::Abs(rapforwarr[a+1])==2.4 &&
+               ((ptforwarr[b]<=6.5 && ptforwarr[b+1]<=6.5) || (ptforwarr[b]>=13 && ptforwarr[b+1]>=13)) ) {
+            feffSimUnf_LowPt[nidx]->SetParameters(1.1,0,0);
+          } else {
+            if (ymin>=1.6 && ymax<=2.4 && ptmin==3 && ptmax==4.5) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.08,0.98,0.43,0.08);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==5.5 && ptmax==6.5) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.96,0.47,0.11);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==6.5 && ptmax==7.5) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.02,2.8,0.15,0.21);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==6.5 && ptmax==8.5) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.013,4.5,1.06,0.15);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==8.5 && ptmax==11) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.113,4.22,0.974,0.184);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==11 && ptmax==16) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.062,3.69,0.887,0.302);
+//              feffSimUnf_LowPt[nidx]->SetParameters(0.062,3.52,0.2,0.319);
+            } else if (ymin>=1.6 && ymax<=2.4 && ptmin==10 && ptmax==12) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.18,1.57,0.55,0.33);
+            } else if (ymin>=-2.4 && ymax<=-1.6 && ptmin==8.5 && ptmax==11) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.113,4.22,0.974,0.184);
+            } else if (ymin>=-2.4 && ymax<=-1.6 && ptmin==11 && ptmax==16) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.062,3.52,0.2,0.319);
+            } else if (ymin>=-2.4 && ymax<=-1.6 && ptmin==3 && ptmax==4.5) {
+              feffSimUnf_LowPt[nidx]->SetParameters(0.1,0.93,0.22,0.08);
+            }
+          }
         } else {
           feffSimUnf_LowPt[nidx]->SetParameters(1.1,0,0);
         }
 
-        TFitResultPtr res = geffSimUnf_LowPt[nidx]->Fit(Form("%s_TF",heffSimUnf_LowPt[nidx]->GetName()),"R S EX0 M");
+        TFitResultPtr res = geffSimUnf_LowPt[nidx]->Fit(Form("%s_TF",heffSimUnf_LowPt[nidx]->GetName()),"S EX0 M");
         cout << feffSimUnf_LowPt[nidx]->GetName() << endl;
         int counter=0;
         if (0 != res->Status()) {
           while (1) {
             counter++;
-            res = geffSimUnf_LowPt[nidx]->Fit(Form("%s_TF",heffSimUnf_LowPt[nidx]->GetName()),"R S EX0 M");
+            res = geffSimUnf_LowPt[nidx]->Fit(Form("%s_TF",heffSimUnf_LowPt[nidx]->GetName()),"S EX0 M");
             if (0==res->Status() || counter > 10) break;
           }    
         }    
@@ -2149,18 +2210,23 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        feffProf_LowPt[nidx]->SetParameters(1.1,0,0);
-/*        if (isPbPb) {
-          if (ymin==0.0 && ymax==0.6 && ptmin==6.5 && ptmax==8.5) {
-            //But this bin always fails because of its shape
-            feffProf_LowPt[nidx]->SetParameters(0.12,1.48,0.42,0.15);
-          } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3.0 && ptmax==6.5) {
-            feffProf_LowPt[nidx]->SetParameters(0.1,1.07,0.49,0.11);
-          } else if (ymin==1.6 && ymax==2.4 && ptmin==6.5 && ptmax==8.5) {
-            //But this bin always fails because of its shape
-            feffProf_LowPt[nidx]->SetParameters(0.17,1.35,0.62,0.19);
+        if (isPbPb) {
+          if ( TMath::Abs(rapforwarr[a])==1.6 && TMath::Abs(rapforwarr[a+1])==2.4 &&
+               ((ptforwarr[b]<=6.5 && ptforwarr[b+1]<=6.5) || (ptforwarr[b]>=13 && ptforwarr[b+1]>=13)) ) {
+            feffProf_LowPt[nidx]->SetParameters(1.1,0,0);
+          } else {
+            feffProf_LowPt[nidx]->SetParameters(0.5,4,8,0.2);
+            if (ymin==0.0 && ymax==0.6 && ptmin==6.5 && ptmax==8.5) {
+              //But this bin always fails because of its shape
+              feffProf_LowPt[nidx]->SetParameters(0.12,1.48,0.42,0.15);
+            } else if (ymin==-2.4 && ymax==-1.6 && ptmin==3.0 && ptmax==6.5) {
+              feffProf_LowPt[nidx]->SetParameters(0.1,1.07,0.49,0.11);
+            } else if (ymin==1.6 && ymax==2.4 && ptmin==6.5 && ptmax==8.5) {
+              //But this bin always fails because of its shape
+              feffProf_LowPt[nidx]->SetParameters(0.17,1.35,0.62,0.19);
+            }
           }
-        }*/ 
+        } else feffProf_LowPt[nidx]->SetParameters(1.1,0,0);
 
         TFitResultPtr res = geffProf_LowPt[nidx]->Fit(Form("%s_TF",heffProf_LowPt[nidx]->GetName()),"R S EX0");
         int counter=0;
@@ -2272,10 +2338,10 @@ int main(int argc, char *argv[]) {
   SuperImposeRatio(heffProf, heffSimUnf, heffRatio, nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, isPbPb, absRapidity);
   SuperImposeRatio(heffProf_LowPt, heffSimUnf_LowPt, heffRatio_LowPt, nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, isPbPb, absRapidity);
 
-  LxyEff_3D(output, fileMid, fileMidCT, heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
-  LxyEff_3D(output, fileForw, fileForwCT, heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
-  LxyEff_3D(output, fileMid, fileMidCT, heffProf, "UseProfile", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
-  LxyEff_3D(output, fileForw, fileForwCT, heffProf_LowPt, "UseProfile", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
+//  LxyEff_3D(output, fileMid, fileMidCT, heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
+//  LxyEff_3D(output, fileForw, fileForwCT, heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
+//  LxyEff_3D(output, fileMid, fileMidCT, heffProf, "UseProfile", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, nbinsmidctau, _ctauarray, isPbPb, absRapidity);
+//  LxyEff_3D(output, fileForw, fileForwCT, heffProf_LowPt, "UseProfile", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, nbinsforwctau, _ctauforwarray, isPbPb, absRapidity);
 
   LxyEff_diff3D(geffSimUnf, heffSimUnf, "SimpleUnfolding", nRapArr, raparr, nPtArr, ptarr, nCentArr, centarr, isPbPb, absRapidity);
   LxyEff_diff3D(geffSimUnf_LowPt, heffSimUnf_LowPt, "SimpleUnfolding", nRapForwArr, rapforwarr, nPtForwArr, ptforwarr, nCentForwArr, centforwarr, isPbPb, absRapidity);

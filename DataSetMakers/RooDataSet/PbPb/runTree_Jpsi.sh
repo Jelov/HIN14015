@@ -7,7 +7,7 @@ inputf=/home/mihee/cms/oniaTree/2011PbPb/All_Histos_cmssw445p1_RegIt_EvtPlane_sm
 
 cent=0  #0: centrality 40 bins(pbpb), 1: pp, 2: pA 
 trigtype=3
-runtype=0
+runtype=0  #0: default
 checkrp=1
 rpnum=-1
 weight=1
@@ -32,7 +32,9 @@ function program {
 #--------------------------------------------------------------------
 # program dirName $cent $trigtype $runtype $checkrp $rpnum $weight
 #--------------------------------------------------------------------
-program bit1_weightedEff $cent $trigtype $runtype $checkrp $rpnum $weight weightedEff
+program bit1_weightedEff $cent $trigtype $runtype $checkrp $rpnum $weight profile weightedEff
+#program bit1_weightedEff $cent $trigtype $runtype $checkrp $rpnum $weight weightedEff
+
 #program bit1_weightedEff_InEta1.6 $cent $trigtype 2 $checkrp $rpnum $weight weightedEff
 
 #program bit1_weightedEff_notSingleMuW $cent $trigtype $runtype $checkrp $rpnum $weight weightedEff 

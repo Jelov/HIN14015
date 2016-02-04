@@ -4,10 +4,10 @@
 //Write() function of the RooPlot
 
 int main (int argc, char* argv[]) {
-//  RooMsgService::instance().getStream(0).removeTopic(Plotting);
+  RooMsgService::instance().getStream(0).removeTopic(Plotting);
   RooMsgService::instance().getStream(0).removeTopic(InputArguments);
   RooMsgService::instance().getStream(1).removeTopic(InputArguments);
-//  RooMsgService::instance().getStream(1).removeTopic(Plotting);
+  RooMsgService::instance().getStream(1).removeTopic(Plotting);
 //  RooMsgService::instance().getStream(1).removeTopic(NumIntegration);
 //  RooMsgService::instance().getStream(1).removeTopic(Minimization);
   RooMsgService::instance().getStream(1).removeTopic(Caching);
@@ -211,7 +211,7 @@ int main (int argc, char* argv[]) {
   }
 
   // Define binning for lifetime
-  RooBinning rb2 = setCtBinning(lmin,lmax);
+  RooBinning rb2 = setCtBinning(inOpt);
   RooBinning rbCorser(-lmin,lmax);
   rbCorser.addUniform(60,-lmin,lmax);
 //  ws->var("Jpsi_Ct")->setBins(90);  //original
@@ -302,7 +302,7 @@ int main (int argc, char* argv[]) {
   defineCTResol(ws, inOpt);              // R(l) : resolution function
   defineCTBkg(ws, inOpt);                // theta(l') convolution R(l')
   titlestr = inOpt.dirPre + "_rap" + inOpt.yrange + "_pT" + inOpt.prange + "_cent" + inOpt.crange + "_dPhi" + inOpt.phirange + "_testTrueLifeFit";
-  defineCTSig(ws,redMCCutNP,titlestr,lmax,inOpt); // F_B(l) : X_mc(l')
+  defineCTSig(ws,redMCCut,redMCCutNP,titlestr,lmax,inOpt); // F_B(l) : X_mc(l')
 
   char funct[100];
 
@@ -465,24 +465,24 @@ int main (int argc, char* argv[]) {
                 ws->var("sigmaSig2")->setVal(0.05);
               }
             } else if (inOpt.doWeight==0) {
-              ws->var("sigmaSig1")->setRange(0.040,0.12);
-              ws->var("sigmaSig2")->setRange(0.005,0.065);
+              ws->var("sigmaSig1")->setRange(0.025,0.11);
+              ws->var("sigmaSig2")->setRange(0.010,0.09);
               if (!centest && !dPhitest) {
                 ws->var("sigmaSig1")->setVal(0.06);
               }
               if (!dPhitest) {
-                ws->var("sigmaSig2")->setVal(0.02);
+                ws->var("sigmaSig2")->setVal(0.01);
               }
             }
           }
           else if (inOpt.pmax <= 8.5) {
-            ws->var("sigmaSig1")->setRange(0.005,0.045);
+            ws->var("sigmaSig1")->setRange(0.01,0.07);
             ws->var("sigmaSig2")->setRange(0.020,0.10);
             if (!centest && !dPhitest) {
-              ws->var("sigmaSig1")->setVal(0.01);
+              ws->var("sigmaSig1")->setVal(0.02);
             }
             if (!dPhitest) {
-              ws->var("sigmaSig2")->setVal(0.07);
+              ws->var("sigmaSig2")->setVal(0.02);
             }
           } 
         } // rap0.0-2.4
@@ -514,10 +514,26 @@ int main (int argc, char* argv[]) {
                 }
               } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
                 ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.02,0.09);
+                ws->var("sigmaSig1")->setRange(0.02,0.10);
+                ws->var("sigmaSig2")->setRange(0.02,0.10);
+                ws->var("sigmaSig1")->setVal(0.035);
+                ws->var("sigmaSig2")->setVal(0.045);
+              } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
+                ws->var("coefExp")->setRange(-1,3);
+//                ws->var("sigmaSig1")->setRange(0.01,0.10);
+//                ws->var("sigmaSig2")->setRange(0.01,0.10);
+//                ws->var("sigmaSig1")->setVal(0.03);
+//                ws->var("sigmaSig2")->setVal(0.055);
+                ws->var("sigmaSig1")->setRange(0.01,0.10);
+                ws->var("sigmaSig2")->setRange(0.01,0.10);
+                ws->var("sigmaSig1")->setVal(0.03);
+                ws->var("sigmaSig2")->setVal(0.01);
+              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
+                ws->var("coefExp")->setRange(-1,3);
+                ws->var("sigmaSig1")->setRange(0.01,0.10);
                 ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.05);
-                ws->var("sigmaSig2")->setVal(0.03);
+                ws->var("sigmaSig1")->setVal(0.035);
+                ws->var("sigmaSig2")->setVal(0.025);
               } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
                 ws->var("coefExp")->setRange(-1,3);
                 ws->var("sigmaSig1")->setRange(0.01,0.09);
@@ -1148,17 +1164,18 @@ int main (int argc, char* argv[]) {
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
           }
         } else if (inOpt.isPbPb==1) { //PbPb
-          if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) 
-             ){
-            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-          } else if (inOpt.ymin>=1.6 && inOpt.ymax<=2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
-            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-          } else { //Normal PbPb bins
+//          if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) 
+//             ){
+//            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
+//            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
+//          } else
+//          if (inOpt.ymin>=1.6 && inOpt.ymax<=2.4) { // && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
+//            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
+//            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
+//          } else { //Normal PbPb bins
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-          }
+//          }
         }
 
       } else if (inOpt.prefitSignalCTau && inOpt.isPEE == 0) {
@@ -1222,15 +1239,7 @@ int main (int argc, char* argv[]) {
           ws->var("lambdasym")->setVal(0.140942);
         }
       } else if (inOpt.isPbPb == 1) {
-        if (inOpt.ymin==0.0 && inOpt.ymax==1.2 && inOpt.pmin==6.5 && inOpt.pmax==30 &&
-           (inOpt.cmin==40 || inOpt.cmin==50) && (inOpt.cmax==100 || inOpt.cmax==50)) {
-          ws->var("fpm")->setVal(0.62427);
-          ws->var("fLiving")->setVal(0.77221);
-          ws->var("fbkgCtTot")->setVal(0.1);
-          ws->var("lambdap")->setVal(0.40456);
-          ws->var("lambdam")->setVal(0.018352);
-          ws->var("lambdasym")->setVal(0.030308);
-        } else if (inOpt.ymin==0.0 && inOpt.ymax==2.4) {
+        if (inOpt.ymin==0.0 && inOpt.ymax==2.4) {
           if (inOpt.pmin==6.5 && (inOpt.pmax==8 || inOpt.pmax==7.5) ) {
             ws->var("fpm")->setVal(0.49);
             ws->var("fLiving")->setVal(0.91);
@@ -1238,326 +1247,79 @@ int main (int argc, char* argv[]) {
             ws->var("lambdap")->setVal(0.13);
             ws->var("lambdam")->setVal(0.088);
             ws->var("lambdasym")->setVal(0.3);
-          } else if (inOpt.pmin==6.5 && inOpt.pmax==10 && inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
-            ws->var("fpm")->setVal(0.521124);
-            ws->var("fLiving")->setVal(0.963374);
-            ws->var("fbkgCtTot")->setVal(0.456605);
-            ws->var("lambdap")->setVal(0.190191);
-            ws->var("lambdam")->setVal(0.0583877);
-            ws->var("lambdasym")->setVal(0.478137);
           } else if (inOpt.pmin==6.5 && inOpt.pmax==30) {
-            if (inOpt.cmin==60 && inOpt.cmax==100) {
-              ws->var("fpm")->setVal(0.419);
-              ws->var("fLiving")->setVal(0.8085);
-              ws->var("fbkgCtTot")->setVal(0.23);
-              ws->var("lambdap")->setVal(0.197);
-              ws->var("lambdam")->setVal(0.0537);
-              ws->var("lambdasym")->setVal(0.0409);
-            } else if (inOpt.cmin==0 && inOpt.cmax==10 && inOpt.psmin==0.393 && inOpt.psmax==0.785){
-              ws->var("fpm")->setVal(0.5915);
-              ws->var("fLiving")->setVal(0.3926);
-              ws->var("fbkgCtTot")->setVal(0.5766);
-              ws->var("lambdap")->setVal(0.2921);
-              ws->var("lambdam")->setVal(0.05098);
-              ws->var("lambdasym")->setVal(0.1191);
-            } else if (inOpt.cmin==10 && inOpt.cmax==20 && inOpt.psmin==0.000 && inOpt.psmax==0.393){
-              ws->var("fpm")->setVal(0.604194);
-              ws->var("fLiving")->setVal(0.932512);
-              ws->var("fbkgCtTot")->setVal(0.429754);
-              ws->var("lambdap")->setVal(0.138205);
-              ws->var("lambdam")->setVal(0.0550462);
-              ws->var("lambdasym")->setVal(0.324249);
-            } else if (inOpt.cmin==10 && inOpt.cmax==20 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
-              ws->var("fpm")->setVal(0.965);
-              ws->var("fLiving")->setVal(0.4255);
-              ws->var("fbkgCtTot")->setVal(0.564);
-              ws->var("lambdap")->setVal(0.401);
-              ws->var("lambdam")->setVal(0.00935);
-              ws->var("lambdasym")->setVal(0.09357);
-/*            } else if (inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.000 && inOpt.psmax==0.393 ){
-              ws->var("fpm")->setVal(0.938882);
-              ws->var("fLiving")->setVal(0.430142);
-              ws->var("fbkgCtTot")->setVal(0.470296);
-              ws->var("lambdap")->setVal(0.148118);
-              ws->var("lambdam")->setVal(0.00706525);
-              ws->var("lambdasym")->setVal(0.0677687);
-*/            } else if (inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
-              ws->var("fpm")->setVal(0.487987);
-              ws->var("fLiving")->setVal(0.999);
-              ws->var("fbkgCtTot")->setVal(0.399004);
-              ws->var("lambdap")->setVal(0.157051);
-              ws->var("lambdam")->setVal(0.0573936);
-              ws->var("lambdasym")->setVal(0.110217);
+            if (inOpt.cmin==20 && inOpt.cmax==30) {
+              ws->var("fpm")->setVal(0.643);
+              ws->var("fLiving")->setVal(0.984);
+              ws->var("fbkgCtTot")->setVal(0.558);
+              ws->var("lambdap")->setVal(0.196);
+              ws->var("lambdam")->setVal(0.071);
+              ws->var("lambdasym")->setVal(0.492);
+            } else if (inOpt.cmin==30 && (inOpt.cmax==35 || inOpt.cmax==40)) {
+              ws->var("fpm")->setVal(0.99);
+              ws->var("fLiving")->setVal(0.445);
+              ws->var("fbkgCtTot")->setVal(0.389);
+              ws->var("lambdap")->setVal(0.206);
+              ws->var("lambdam")->setVal(0.0816);
+              ws->var("lambdasym")->setVal(0.0711);
             } // end of PbPb rap0.0-2.4_pT6.5-30.0
-          } else if (inOpt.pmin==10 && inOpt.pmax==13 && inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.785 && inOpt.psmax==1.178){
-            ws->var("fpm")->setVal(0.80241);
-            ws->var("fLiving")->setVal(0.479431);
-            ws->var("fbkgCtTot")->setVal(0.00001);
-            ws->var("lambdap")->setVal(0.164);
-            ws->var("lambdam")->setVal(0.125);
-            ws->var("lambdasym")->setVal(0.03);
           } // end of PbPb rap0.0-2.4
-        } else if (inOpt.ymin==1.2 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 &&
-                   inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0.000 && inOpt.psmax==0.393){
-          ws->var("fpm")->setVal(0.633311);
-          ws->var("fLiving")->setVal(0.999987);
-          ws->var("fbkgCtTot")->setVal(0.561543);
-          ws->var("lambdap")->setVal(0.190129);
-          ws->var("lambdam")->setVal(0.108856);
-          ws->var("lambdasym")->setVal(0.127791);
         } else if (inOpt.ymin==1.2 && inOpt.ymax==1.6 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          if (inOpt.cmin==40 && inOpt.cmax==50) {
+          if (inOpt.cmin==30 && inOpt.cmax==40) {
             ws->var("fpm")->setVal(0.99);
-            ws->var("fLiving")->setVal(0.51);
-            ws->var("fbkgCtTot")->setVal(0.56);
-            ws->var("lambdap")->setVal(0.28);
-            ws->var("lambdam")->setVal(0.18);
-            ws->var("lambdasym")->setVal(0.109);
-          } else if (inOpt.cmin==30 && inOpt.cmax==40) {
-            ws->var("fpm")->setVal(0.55);
-            ws->var("fLiving")->setVal(0.99);
-            ws->var("fbkgCtTot")->setVal(0.22);
-            ws->var("lambdap")->setVal(0.15);
-            ws->var("lambdam")->setVal(0.11);
-            ws->var("lambdasym")->setVal(0.02);
-          } else {
-            ws->var("fpm")->setVal(0.59);
-            ws->var("fLiving")->setVal(0.69);
-            ws->var("fbkgCtTot")->setVal(0.49);
-            ws->var("lambdap")->setVal(0.27);
-            ws->var("lambdam")->setVal(0.1);
-            ws->var("lambdasym")->setVal(0.037);
-          }
-        } else if (inOpt.doWeight==1 && inOpt.ymin==1.6 && inOpt.ymax==2.0 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-            ws->var("fpm")->setVal(0.95599);
-            ws->var("fLiving")->setVal(0.3452);
-            ws->var("fbkgCtTot")->setVal(0.49518);
-            ws->var("lambdap")->setVal(0.18834);
-            ws->var("lambdam")->setVal(0.0070976);
-            ws->var("lambdasym")->setVal(0.059821);
+            ws->var("fLiving")->setVal(0.398);
+            ws->var("fbkgCtTot")->setVal(0.281);
+            ws->var("lambdap")->setVal(0.389);
+            ws->var("lambdam")->setVal(0.0935);
+            ws->var("lambdasym")->setVal(0.0705);
+          } // end of PbPb rap1.2-1.6
         } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
-          if (inOpt.doWeight == 0) {
-            if (inOpt.cmin == 0 && inOpt.cmax == 100) {
-              if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-                ws->var("fpm")->setVal(0.957671);
-                ws->var("fLiving")->setVal(0.737527);
-                ws->var("fbkgCtTot")->setVal(0.763807);
-                ws->var("lambdap")->setVal(0.13676);
-                ws->var("lambdam")->setVal(0.123463);
-                ws->var("lambdasym")->setVal(0.296977);
-              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                ws->var("fpm")->setVal(0.957671);
-                ws->var("fLiving")->setVal(0.737527);
-                ws->var("fbkgCtTot")->setVal(0.763807);
-                ws->var("lambdap")->setVal(0.13676);
-                ws->var("lambdam")->setVal(0.123463);
-                ws->var("lambdasym")->setVal(0.296977);
-              } else if (inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.psmin==0.785 && inOpt.psmax==1.178) {
-                ws->var("fpm")->setVal(0.9999);
-                ws->var("fLiving")->setVal(0.53854);
-                ws->var("fbkgCtTot")->setVal(0.77793);
-                ws->var("lambdap")->setVal(0.18213);
-                ws->var("lambdam")->setVal(0.011501);
-                ws->var("lambdasym")->setVal(0.12218);
-              } else {
-                ws->var("fpm")->setVal(0.999);
-                ws->var("fLiving")->setVal(0.27254);
-                ws->var("fbkgCtTot")->setVal(0.6533);
-                ws->var("lambdap")->setVal(0.21882);
-                ws->var("lambdam")->setVal(0.013298);
-                ws->var("lambdasym")->setVal(0.0798);
-              }
-            }/* else if (inOpt.cmin == 20 && inOpt.cmax == 30) {
-              ws->var("fpm")->setVal(0.999);
-              ws->var("fLiving")->setVal(0.6869);
-              ws->var("fbkgCtTot")->setVal(0.74382);
-              ws->var("lambdap")->setVal(0.10633);
-              ws->var("lambdam")->setVal(0.00899);
-              ws->var("lambdasym")->setVal(0.21727);
-            } else if (inOpt.cmin == 20 && inOpt.cmax == 40) {
-              ws->var("fpm")->setVal(0.999);
-              ws->var("fLiving")->setVal(0.327);
-              ws->var("fbkgCtTot")->setVal(0.606);
-              ws->var("lambdap")->setVal(0.145);
-              ws->var("lambdam")->setVal(0.0158);
-              ws->var("lambdasym")->setVal(0.083);
-            }*/ else if (inOpt.cmin == 30 && inOpt.cmax == 40) {
-              ws->var("fpm")->setVal(0.99975);
-              ws->var("fLiving")->setVal(0.45546);
-              ws->var("fbkgCtTot")->setVal(0.70);
-              ws->var("lambdap")->setVal(0.14217);
-              ws->var("lambdam")->setVal(0.008405);
-              ws->var("lambdasym")->setVal(0.092943);
-            } else if (inOpt.cmin == 40 && inOpt.cmax == 50) {
-              ws->var("fpm")->setVal(0.99);
-              ws->var("fLiving")->setVal(0.064);
-              ws->var("fbkgCtTot")->setVal(0.0001);
-              ws->var("lambdap")->setVal(0.181);
-              ws->var("lambdam")->setVal(0.501);
-              ws->var("lambdasym")->setVal(0.0256);
-            } else if ((inOpt.cmin == 40 || inOpt.cmin == 50) && inOpt.cmax == 100) {
-              ws->var("fpm")->setVal(0.99);
-              ws->var("fLiving")->setVal(0.064);
-              ws->var("fbkgCtTot")->setVal(0.0001);
-              ws->var("lambdap")->setVal(0.181);
-              ws->var("lambdam")->setVal(0.501);
-              ws->var("lambdasym")->setVal(0.0256);
-            } else {
-              ws->var("fpm")->setVal(0.63);
-              ws->var("fLiving")->setVal(0.32);
-              ws->var("fbkgCtTot")->setVal(0.83);
-              ws->var("lambdap")->setVal(0.35);
-              ws->var("lambdam")->setVal(0.30);
-              ws->var("lambdasym")->setVal(0.12);
-            } // end of not-weighted setting
-          } else {  // weighting applied
-            if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-              ws->var("fpm")->setVal(0.957671);
-              ws->var("fLiving")->setVal(0.737527);
-              ws->var("fbkgCtTot")->setVal(0.763807);
-              ws->var("lambdap")->setVal(0.13676);
-              ws->var("lambdam")->setVal(0.123463);
-              ws->var("lambdasym")->setVal(0.296977);
-            } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-              ws->var("fpm")->setVal(0.991401);
-              ws->var("fLiving")->setVal(0.340025);
-              ws->var("fbkgCtTot")->setVal(0.565982);
-              ws->var("lambdap")->setVal(0.201516);
-              ws->var("lambdam")->setVal(0.276386);
-              ws->var("lambdasym")->setVal(0.0867955);
-            } else if (inOpt.cmin == 0 && inOpt.cmax == 100) {
-              ws->var("fpm")->setVal(0.9999);
-              ws->var("fLiving")->setVal(0.808347);
-              ws->var("fbkgCtTot")->setVal(0.785043);
-              ws->var("lambdap")->setVal(0.114466);
-              ws->var("lambdam")->setVal(0.245654);
-              ws->var("lambdasym")->setVal(0.343403);
-            } else if (inOpt.cmin == 40 && inOpt.cmax == 50) {
-              ws->var("fpm")->setVal(0.098713);
-              ws->var("fLiving")->setVal(0.92529);
-              ws->var("fbkgCtTot")->setVal(0.16331);
-              ws->var("lambdap")->setVal(0.17607);
-              ws->var("lambdam")->setVal(0.0171);
-              ws->var("lambdasym")->setVal(0.19582);
-            } else if (inOpt.cmin == 40 && inOpt.cmax == 100) {
-              ws->var("fpm")->setVal(0.8064);
-              ws->var("fLiving")->setVal(0.1871);
-              ws->var("fbkgCtTot")->setVal(0.8031);
-              ws->var("lambdap")->setVal(0.4052);
-              ws->var("lambdam")->setVal(0.4406);
-              ws->var("lambdasym")->setVal(0.098);
-            } else if (inOpt.cmin == 10 && inOpt.cmax == 20) {
-              ws->var("fpm")->setVal(0.8064);
-              ws->var("fLiving")->setVal(0.1871);
-              ws->var("fbkgCtTot")->setVal(0.8031);
-              ws->var("lambdap")->setVal(0.4052);
-              ws->var("lambdam")->setVal(0.4406);
-              ws->var("lambdasym")->setVal(0.098);
-            } else if (inOpt.cmin == 10 && inOpt.cmax == 60 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
-              ws->var("fpm")->setVal(1);
-              ws->var("fLiving")->setVal(0.773816);
-              ws->var("fbkgCtTot")->setVal(0.800519);
-              ws->var("lambdap")->setVal(0.0980537);
-              ws->var("lambdam")->setVal(0.0131237);
-              ws->var("lambdasym")->setVal(0.231617);
-            } else if (inOpt.cmin == 10 && inOpt.cmax == 60) {
-              ws->var("fpm")->setVal(1);
-              ws->var("fLiving")->setVal(0.585);
-              ws->var("fbkgCtTot")->setVal(0.7386);
-              ws->var("lambdap")->setVal(0.146);
-              ws->var("lambdam")->setVal(0.0144);
-              ws->var("lambdasym")->setVal(0.068);
-            } else if (inOpt.cmin==30 && inOpt.cmax==60 && inOpt.psmin==0.393 && inOpt.psmax==0.785){
-/*              ws->var("fpm")->setVal(0.6725);
-              ws->var("fLiving")->setVal(0.9999);
-              ws->var("fbkgCtTot")->setVal(0.773);
-              ws->var("lambdap")->setVal(0.53);
-              ws->var("lambdam")->setVal(0.2365);
-              ws->var("lambdasym")->setVal(0.02);
-*/              ws->var("fpm")->setVal(1);
-              ws->var("fLiving")->setVal(0.95415);
-              ws->var("fbkgCtTot")->setVal(0.66437);
-              ws->var("lambdap")->setVal(0.11857);
-              ws->var("lambdam")->setVal(0.0073266);
-              ws->var("lambdasym")->setVal(0.14165);
-            } else {
-              ws->var("fpm")->setVal(0.57);
-              ws->var("fLiving")->setVal(0.92);
-              ws->var("fbkgCtTot")->setVal(0.86);
-              ws->var("lambdap")->setVal(0.37);
-              ws->var("lambdam")->setVal(0.21);
-              ws->var("lambdasym")->setVal(0.02);
-            }
-          } // end of setting for 3-6.5
+          if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+            ws->var("fpm")->setVal(0.734);
+            ws->var("fLiving")->setVal(0.84);
+            ws->var("fbkgCtTot")->setVal(0.679);
+            ws->var("lambdap")->setVal(0.113);
+            ws->var("lambdam")->setVal(0.074);
+            ws->var("lambdasym")->setVal(0.311);
+          } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
+            ws->var("fpm")->setVal(0.733);
+            ws->var("fLiving")->setVal(0.848);
+            ws->var("fbkgCtTot")->setVal(0.711);
+            ws->var("lambdap")->setVal(0.125);
+            ws->var("lambdam")->setVal(0.071);
+            ws->var("lambdasym")->setVal(0.31);
+          } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
+            ws->var("fpm")->setVal(0.640);
+            ws->var("fLiving")->setVal(0.865);
+            ws->var("fbkgCtTot")->setVal(0.706);
+            ws->var("lambdap")->setVal(0.138);
+            ws->var("lambdam")->setVal(0.0708);
+            ws->var("lambdasym")->setVal(0.307);
+          } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
+            ws->var("fpm")->setVal(0.59);
+            ws->var("fLiving")->setVal(0.546);
+            ws->var("fbkgCtTot")->setVal(0.845);
+            ws->var("lambdap")->setVal(0.317);
+            ws->var("lambdam")->setVal(0.0819);
+            ws->var("lambdasym")->setVal(0.255);
+          } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
+            ws->var("fpm")->setVal(0.640);
+            ws->var("fLiving")->setVal(0.865);
+            ws->var("fbkgCtTot")->setVal(0.706);
+            ws->var("lambdap")->setVal(0.138);
+            ws->var("lambdam")->setVal(0.0708);
+            ws->var("lambdasym")->setVal(0.307);
+          }
         } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          if (inOpt.doWeight == 1 && inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.000 && inOpt.psmax==0.393) {
-            ws->var("fpm")->setVal(0.999998);
-            ws->var("fLiving")->setVal(0.385604);
-            ws->var("fbkgCtTot")->setVal(0.490384);
-            ws->var("lambdap")->setVal(0.187418);
-            ws->var("lambdam")->setVal(0.0823106);
-            ws->var("lambdasym")->setVal(0.0678111);
-          } else if (inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
-            ws->var("fpm")->setVal(0.677);
-            ws->var("fLiving")->setVal(0.999);
-            ws->var("fbkgCtTot")->setVal(0.527);
-            ws->var("lambdap")->setVal(0.157);
-            ws->var("lambdam")->setVal(0.0486);
-            ws->var("lambdasym")->setVal(0.22);
-          } else if (inOpt.doWeight==1 && inOpt.cmin==0 && inOpt.cmax==100) {
-            ws->var("fpm")->setVal(0.59918);
-            ws->var("fLiving")->setVal(0.59259);
-            ws->var("fbkgCtTot")->setVal(0.52844);
-            ws->var("lambdap")->setVal(0.1808);
-            ws->var("lambdam")->setVal(0.0076025);
-            ws->var("lambdasym")->setVal(0.098186);
-          } else if (inOpt.cmin==0 && inOpt.cmax==10) {
-            ws->var("fpm")->setVal(0.56);
-            ws->var("fLiving")->setVal(0.92);
-            ws->var("fbkgCtTot")->setVal(0.80);
-            ws->var("lambdap")->setVal(0.16);
-            ws->var("lambdam")->setVal(0.087);
-            ws->var("lambdasym")->setVal(0.89);
-          } else if (inOpt.cmin==10 && inOpt.cmax==20) {
-            ws->var("fpm")->setVal(0.56);
-            ws->var("fLiving")->setVal(0.92);
-            ws->var("fbkgCtTot")->setVal(0.80);
-            ws->var("lambdap")->setVal(0.16);
-            ws->var("lambdam")->setVal(0.087);
-            ws->var("lambdasym")->setVal(0.89);
-          } else if (inOpt.cmin==30 && inOpt.cmax==40) {
-            if (inOpt.doWeight == 0) {
-              ws->var("fpm")->setVal(0.52);
-              ws->var("fLiving")->setVal(0.99);
-              ws->var("fbkgCtTot")->setVal(0.33);
-              ws->var("lambdap")->setVal(0.22);
-              ws->var("lambdam")->setVal(0.041);
-              ws->var("lambdasym")->setVal(0.02);
-            } else if (inOpt.doWeight == 1) {
-              ws->var("fpm")->setVal(0.27);
-              ws->var("fLiving")->setVal(1.0);
-              ws->var("fbkgCtTot")->setVal(0.63);
-              ws->var("lambdap")->setVal(0.22);
-              ws->var("lambdam")->setVal(0.06);
-              ws->var("lambdasym")->setVal(0.02);
-            }
-          } else if ((inOpt.cmin==10 && inOpt.cmax==30 && inOpt.psmin==0 && inOpt.psmax==0.393) ||
-                     (inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==0 && inOpt.psmax==0.393)) {
-            ws->var("fpm")->setVal(0.5766);
-            ws->var("fLiving")->setVal(0.5212);
-            ws->var("fbkgCtTot")->setVal(0.2841);
-            ws->var("lambdap")->setVal(0.1802);
-            ws->var("lambdam")->setVal(0.1176);
-            ws->var("lambdasym")->setVal(0.0292);
-          } else if (inOpt.cmin==10 && inOpt.cmax==60 && inOpt.psmin==1.178 && inOpt.psmax==1.571) {
-            ws->var("fpm")->setVal(0.873);
-            ws->var("fLiving")->setVal(0.339);
-            ws->var("fbkgCtTot")->setVal(0.0142);
-            ws->var("lambdap")->setVal(0.1581);
-            ws->var("lambdam")->setVal(0.141);
-            ws->var("lambdasym")->setVal(0.0261);
-          }  // end of setting for 1.6-2.4 & 6.5-30
-        } else if (inOpt.ymin==2.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30)  {
+          if (inOpt.cmin==30 && inOpt.cmax==40) {
+            ws->var("fpm")->setVal(0.95);
+            ws->var("fLiving")->setVal(0.39);
+            ws->var("fbkgCtTot")->setVal(0.56);
+            ws->var("lambdap")->setVal(0.21);
+            ws->var("lambdam")->setVal(0.55);
+            ws->var("lambdasym")->setVal(0.071);
+          }
+        } else if (inOpt.ymin==2.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30) {
           ws->var("fpm")->setVal(0.56);
           ws->var("fLiving")->setVal(0.92);
           ws->var("fbkgCtTot")->setVal(0.80);
@@ -1636,14 +1398,10 @@ int main (int argc, char* argv[]) {
             if ((inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) ||
                 (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==30)
                ) {
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);//modified_150123
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);//modified_141113
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);//modified_141113
-              ws->var("Bfrac")->setVal(0.05);
-            } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==0 && inOpt.cmax==100 && inOpt.psmin==0.393 && inOpt.psmax==0.785) {
-              if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kFALSE);
+              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
               if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
+              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
+              ws->var("Bfrac")->setVal(0.05);
             } else {
               if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
               if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
@@ -2643,11 +2401,11 @@ void setWSRange(RooWorkspace *ws, double lmin, double lmax, double errmin, doubl
   return;
 }
 
-RooBinning setCtBinning(double lmin,double lmax) {
-  RooBinning rb2(-lmin,lmax);
+RooBinning setCtBinning(InputOpt &opt) {
+  RooBinning rb2(-1*opt.lmin,opt.lmax);
   
-  if (lmax+lmin>4.9) {
-    rb2.addBoundary(-1.5);
+  if (!opt.isPbPb || (opt.lmax+opt.lmin>4.9)) {
+    rb2.addBoundary(-1*opt.lmax);
     rb2.addBoundary(-1.0);
     rb2.addBoundary(-0.8);
     rb2.addBoundary(-0.6);
@@ -2656,93 +2414,28 @@ RooBinning setCtBinning(double lmin,double lmax) {
     rb2.addUniform(18,-0.2,0.2);
     rb2.addUniform(9,0.2,0.5);
     rb2.addUniform(5,0.5,1.0);
-    rb2.addUniform(15,1.0,lmax);
-  } else if (lmax+lmin > 4.4) {
-    rb2.addBoundary(-lmin);
-    rb2.addBoundary(-0.9);
-    rb2.addBoundary(-0.6);
-    rb2.addBoundary(-0.5);
-    rb2.addUniform(12,-0.5,-0.2);
-    rb2.addUniform(40,-0.2,0.2);
-    rb2.addUniform(12,0.2,0.5);
-    rb2.addUniform(18,0.5,1.2);
-    rb2.addUniform(10,1.2,lmax);
-
-/*  binning1
-    rb2.addBoundary(-lmin);
-    rb2.addBoundary(-0.7);
-    rb2.addBoundary(-0.6);
-    rb2.addBoundary(-0.5);
-    rb2.addUniform(9,-0.5,-0.2);
-    rb2.addUniform(40,-0.2,0.2);
-    rb2.addUniform(12,0.2,0.5);
-    rb2.addUniform(15,0.5,1.2);
-    rb2.addUniform(8,1.2,lmax);
-*/    
-/*    rb2.addBoundary(-1.5);
+    rb2.addUniform(15,1.0,opt.lmax);
+  } else if (opt.cmin==0 && opt.cmax==100 && opt.psmin==0 && opt.psmax==1.571) {
+    rb2.addBoundary(-1*opt.lmin);
     rb2.addBoundary(-1.0);
     rb2.addBoundary(-0.8);
     rb2.addBoundary(-0.6);
     rb2.addBoundary(-0.5);
     rb2.addUniform(9,-0.5,-0.2);
-    rb2.addUniform(28,-0.2,0.2);
+    rb2.addUniform(20,-0.2,0.2);
     rb2.addUniform(9,0.2,0.5);
-    rb2.addUniform(5,0.5,1.0);
-    rb2.addUniform(5,1.0,lmax);
-*/
+    rb2.addUniform(14,0.5,1.2);
+    rb2.addUniform(8,1.2,opt.lmax);
   } else {
-    rb2.addBoundary(-lmin);
+    rb2.addBoundary(-1*opt.lmin);
     rb2.addBoundary(-0.7);
     rb2.addBoundary(-0.6);
     rb2.addBoundary(-0.5);
-    rb2.addUniform(9,-0.5,-0.2);
-    rb2.addUniform(40,-0.2,0.2);
-    rb2.addUniform(12,0.2,0.5);
-    rb2.addUniform(15,0.5,1.2);
-    rb2.addUniform(8,1.2,lmax);
-    
-    // finer binning on Jpsi_Ct >= 0.5 mm, default for HIN-12-014
-/*    rb2.addBoundary(-1.0);
-    rb2.addBoundary(-0.7);
-    rb2.addBoundary(-0.6);
-    rb2.addBoundary(-0.5);
-    rb2.addUniform(9,-0.5,-0.2);
-    rb2.addUniform(40,-0.2,0.2);
-    rb2.addUniform(12,0.2,0.5);
-    rb2.addUniform(15,0.5,1.2);
-    rb2.addUniform(6,1.2,lmax);
-*/
-    // Same on JpsiRaa50100ppreco/notAnalyticBfits/fit2DData_pbpb.cpp
-/*    rb2.addUniform(2,-1.0,-0.5);
-    rb2.addUniform(4,-0.5,-0.2);
-    rb2.addUniform(8,-0.2,0.2);
-    rb2.addUniform(4,0.2,0.6);
-    rb2.addUniform(4,0.6,1.0);
-    rb2.addUniform(1,1.0,2.0);
-*/
-
-/*  original binning (from last year)
-    rb2.addBoundary(-1.0);
-    rb2.addBoundary(-0.7);
-    rb2.addBoundary(-0.6);
-    rb2.addBoundary(-0.5);
-    rb2.addUniform(9,-0.5,-0.2);
-    rb2.addUniform(40,-0.2,0.2);
-    rb2.addUniform(12,0.2,0.5);
-    rb2.addUniform(10,0.5,1.0);
-    rb2.addUniform(4,1.0,lmax);*/
-
-/*  from roberto's code on cvs (J/psi only)
-    if (lmin < 1.0) rb2.addBoundary(-1.0);
-    if (lmin < 0.7) rb2.addBoundary(-0.7);
-    if (lmin < 0.6) rb2.addBoundary(-0.6);
-    if (lmin < 0.5) rb2.addBoundary(-0.5);
-    if (lmin < 0.5) lmin = 0.5;
-    rb2.addUniform(6,-lmin,-0.2);
-    rb2.addUniform(50,-0.2,0.2);
-    rb2.addUniform(18,0.2,0.5);
-    rb2.addUniform(21,0.5,1.2);
-    rb2.addUniform(6,1.2,lmax);*/
+    rb2.addUniform(6,-0.5,-0.2);
+    rb2.addUniform(20,-0.2,0.2);
+    rb2.addUniform(6,0.2,0.5);
+    rb2.addUniform(7,0.5,1.2);
+    rb2.addUniform(8,1.2,opt.lmax);
   }
   return rb2;
 }

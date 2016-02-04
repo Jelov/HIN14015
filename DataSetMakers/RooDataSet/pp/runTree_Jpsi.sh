@@ -5,8 +5,8 @@
 #inputf=/home/mihee/cms/oniaTree/2011PbPb/All_Histos_cmssw445p1_RegIt_EvtPlane_small.root
 inputf=/home/mihee/cms/oniaTree/2013pp/All_v2.24_Histos_Runs_211739-211831_GlbGlb_woPileUpRej_muLessPV.root
 
-cent=0  #0: centrality 40 bins(pbpb), 1: pp, 2: pA 
-trigtype=3
+cent=1  #0: centrality 40 bins(pbpb), 1: pp, 2: pA 
+trigtype=4
 runtype=0
 checkrp=1
 rpnum=-1
@@ -38,7 +38,9 @@ function program {
 #program bit1_prof $cent $trigtype $runtype $checkrp $rpnum $weight profile
 #program bit1_raa $cent $trigtype $runtype $checkrp $rpnum 0 profile
 
-program bit2_weightedEff 1 4 $runtype 0 $rpnum $weight weightedEff
+#program bit2_weightedEff $cent $trigtype $runtype 0 $rpnum $weight weightedEff
+program bit2_weightedEff $cent $trigtype $runtype 0 $rpnum $weight profile weightedEff
+
 #program bit2_prof 1 4 $runtype 0 $rpnum $weight profile
 #program bit2_raa 1 4 $runtype 0 $rpnum 0 profile
 
