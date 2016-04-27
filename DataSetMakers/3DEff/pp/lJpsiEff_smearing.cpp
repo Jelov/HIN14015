@@ -54,6 +54,7 @@ int main(int argc, char *argv[]) {
     NPMC->CreateHistos(nbinsy, yarray, nbinspt, ptarray, nbinscent, centarray, nbinsctau, ctauarray, nbinsctauforw, ctauforwarray, nbinsresol, resolmin, resolmax);
     NPMC->SetTree();
     NPMC->LoopTree(yarray, ptarray, centarray, ctauarray, ctauforwarray);
+    NPMC->Smearing(yarray, ptarray, centarray);
     NPMC->GetEfficiency();
     NPMC->SaveHistos("./NPMC_eff.root", yarray, ptarray, centarray);
     delete NPMC;

@@ -2,11 +2,14 @@
 #include <fstream>
 #include <vector>
 #include <stdexcept>
+#include <string>
 
 #include <TROOT.h>
+#include <TSystem.h>
 #include <TStyle.h>
 #include <Math/DistFunc.h>
 #include <Math/SpecFunc.h>
+#include <TSVDUnfold.h>
 #include <TEfficiency.h>
 #include <TH1D.h>
 #include <TH2D.h>
@@ -23,6 +26,7 @@
 #include <TFile.h>
 #include <TTree.h>
 #include <TCanvas.h>
+#include <TColor.h>
 #include <TClonesArray.h>
 #include <TLorentzVector.h>
 #include <TLatex.h>
@@ -44,10 +48,10 @@ bool isForward(double ymin, double ymax) {
 }
 
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
-  if ( (ptmax<=6.5 && ymin>=1.6 && ymax<=2.4) ||
-       (ptmax<=6.5 && ymin>=-2.4 && ymax<=-1.6) ||
-//  if ( (ymin>=1.6 && ymax<=2.4) ||
-//       (ymin>=-2.4 && ymax<=-1.6) ||
+//  if ( (ptmax<=6.5 && ymin>=1.6 && ymax<=2.4) ||
+//       (ptmax<=6.5 && ymin>=-2.4 && ymax<=-1.6) ||
+  if ( (ymin>=1.6 && ymax<=2.4) ||
+       (ymin>=-2.4 && ymax<=-1.6) ||
        (ptmax<9 && ymin>=0 && ymax<=1.2) ||
        (ptmax<9 && ymin>=-1.2 && ymax<=0)
      ) return true;
@@ -139,13 +143,16 @@ double findCenWeight(const int Bin) {
   return(NCollArray[Bin]);
 }
 
-void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
+void getCorrectedEffErr(TH1D *hrec, TH1D *hgen, TH1D *heff) {
+  cout << endl << "getCorrectedEffErr: " << hrec->GetName()<< endl;
+  const int nbins = hrec->GetNbinsX();
   for (int a=0; a<nbins; a++) {
     double genInt = hgen->GetBinContent(a+1);
     double genErr = hgen->GetBinError(a+1);
     double recInt = hrec->GetBinContent(a+1);
     double recErr = hrec->GetBinError(a+1);
     double eff = recInt / genInt;
+    cout << "genInt " << genInt << "\trecInt " << recInt << endl;
 
     double tmpErrGen1 = TMath::Power(eff,2) / TMath::Power(genInt,2);
     double tmpErrRec1 = TMath::Power(recErr,2);
@@ -156,7 +163,7 @@ void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
     double tmpErr2 = tmpErrGen2 * tmpErrRec2;
     double effErr = TMath::Sqrt(tmpErr1 + tmpErr2);
 
-    bool bEffective = true;
+/*    bool bEffective = true;
     bool bPoissonRatio = false;
     double conf = 0.682689492137;
     double delta = 0;
@@ -183,18 +190,21 @@ void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
     cout << "effErr: " << effErr << " eff-low: " << eff-low << " upper-eff: " << upper-eff << endl;
     if (eff-low > upper-eff) effErr = eff-low;
     else effErr = upper-eff;
-
-    if (genInt == 0) {
+*/
+    if (genInt == 0 || std::isnan(genInt) || std::isnan(recInt)) {
       heff->SetBinContent(a+1, 0);
       heff->SetBinError(a+1, 0);
     } else {
+      cout << a+1 << "\teff " << eff << "\teffErr " << effErr << endl;
       heff->SetBinContent(a+1, eff);
       heff->SetBinError(a+1, effErr);
     }
   }
 }
 
-void getCorrectedEffErr(const int nbinsy, const int nbinspt, TH2D *hrec, TH2D *hgen, TH2D *heff) {
+void getCorrectedEffErr(TH2D *hrec, TH2D *hgen, TH2D *heff) {
+  const int nbinsy = hrec->GetNbinsX();
+  const int nbinspt = hrec->GetNbinsY();
   for (int a=1; a<=nbinsy; a++) {
     for (int b=1; b<=nbinspt; b++) {
       int nbin = hgen->GetBin(a,b);
@@ -1352,9 +1362,9 @@ void Eff3DMC::LoopTree(const double *yarray, const double *yarray2, const double
 
 
 void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const int *centarray2) {
-  getCorrectedEffErr(nbinsy-1,h1DRecRap,h1DGenRap,h1DEffRap);
-  getCorrectedEffErr(nbinspt-1,h1DRecPt,h1DGenPt,h1DEffPt);
-  getCorrectedEffErr(nbinscent-1,h1DRecCent,h1DGenCent,h1DEffCent);
+  getCorrectedEffErr(h1DRecRap,h1DGenRap,h1DEffRap);
+  getCorrectedEffErr(h1DRecPt,h1DGenPt,h1DEffPt);
+  getCorrectedEffErr(h1DRecCent,h1DGenCent,h1DEffCent);
 
   // 2D Rap-pT efficiency for fitting
   for (int c=0; c<nbinscent2-1; c++) {
@@ -1382,7 +1392,7 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
     cout << "nbinsy2-1 " << nbinsy2-1 << " nbinspt2or3-1 " << nbinspt2or3-1 << " " << centarray2[c] << " " << centarray2[c+1] << endl;
     cout << h2DRecRapPtFit[c] << " " << h2DGenRapPtFit[c] << " " << h2DEffRapPtFit[c] << endl;
 
-    getCorrectedEffErr(nbinsy2-1,nbinspt2or3-1,h2DRecRapPtFit[c],h2DGenRapPtFit[c],h2DEffRapPtFit[c]);
+    getCorrectedEffErr(h2DRecRapPtFit[c],h2DGenRapPtFit[c],h2DEffRapPtFit[c]);
 
 /*
     if (_ymin<=0 && _ymax<=0) {
@@ -1464,9 +1474,9 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
       cout <<  h1DEffPtFit[nidx] << " " << h1DRecPtFit[nidx] << " " << h1DGenPtFit[nidx] << endl;
 
       if (isForward(ymin,ymax)) {
-        getCorrectedEffErr(nbinspt3-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
+        getCorrectedEffErr(h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
       } else {
-        getCorrectedEffErr(nbinspt2-1,h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
+        getCorrectedEffErr(h1DRecPtFit[nidx],h1DGenPtFit[nidx],h1DEffPtFit[nidx]);
       }
 
       // Move pT values of histograms to <pT>
@@ -1673,7 +1683,7 @@ void Eff3DMC::GetEfficiency(const double *yarray2, const double *ptarray2, const
       cout << nidx<< " " << b << " " << c << " " << ptmin << " " << ptmax << " " << centmin << " " << centmax << endl;
       cout <<  h1DEffRapFit[nidx] << " " << h1DRecRapFit[nidx] << " " << h1DGenRapFit[nidx] << endl;
 
-      getCorrectedEffErr(nbinsy2-1,h1DRecRapFit[nidx],h1DGenRapFit[nidx],h1DEffRapFit[nidx]);
+      getCorrectedEffErr(h1DRecRapFit[nidx],h1DGenRapFit[nidx],h1DEffRapFit[nidx]);
 
       // Move rap values of histograms to <rap>
       cout << "\t\t" << h1DEffRapFit[nidx]->GetName() << endl;
@@ -1827,15 +1837,15 @@ class EffMC {
     bool absRapidity, npmc, isPbPb;
     int useTnPCorr;
 
-    string inFileNames[100], className, outFileName;
-    TFile *file, *inFile[100], *outfile, *fileSinMuW, *fileSinMuW_LowPt;
+    string inFileNames[50], className, outFileName;
+    TFile *file, *inFile[50], *outfile, *fileSinMuW, *fileSinMuW_LowPt;
     TTree *tree;
     TChain *chain;
     int nFiles;
     
-    int centrality, HLTriggers, Reco_QQ_trig[100], Reco_QQ_sign[100];
+    int centrality, HLTriggers, Reco_QQ_trig[50], Reco_QQ_sign[50];
     int Reco_QQ_size, Gen_QQ_size;
-    float Reco_QQ_ctau[100], Reco_QQ_ctauTrue[100], Gen_QQ_ctau[100], Reco_QQ_VtxProb[100];
+    float Reco_QQ_ctau[50], Reco_QQ_ctauTrue[50], Gen_QQ_ctau[50], Reco_QQ_VtxProb[50];
     TClonesArray *Reco_QQ_4mom, *Gen_QQ_4mom;
     TClonesArray *Reco_QQ_mupl_4mom, *Gen_QQ_mupl_4mom;
     TClonesArray *Reco_QQ_mumi_4mom, *Gen_QQ_mumi_4mom;
@@ -1843,14 +1853,14 @@ class EffMC {
     int nbinsy, nbinspt, nbinsctau, nbinsmidctau, nbinsforwctau, nbinscent, nbinsresol;
     double resolmin, resolmax;
 
-    string inFileNamesLxyz[100];
-    TFile *fileLxyz, *inFileLxyz[100];
+    string inFileNamesLxyz[50];
+    TFile *fileLxyz, *inFileLxyz[50];
     TTree *treeLxyz;
     TChain *chainLxyz;
 
     unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
     Int_t Reco_QQ_sizeLxyz, Gen_QQ_sizeLxyz;
-    Float_t Reco_QQ_ctau3D[100], Reco_QQ_ctauTrue3D[100], Reco_QQ_ctauLxy[100], Gen_QQ_ctau3D[100];
+    Float_t Reco_QQ_ctau3D[50], Reco_QQ_ctauTrue3D[50], Reco_QQ_ctauLxy[50], Gen_QQ_ctau3D[50];
     TClonesArray *Reco_QQ_4momLxyz, *Gen_QQ_4momLxyz;
     
     TBranch *b_eventNbLxyz, *b_runNbLxyz, *b_LSLxyz, *b_Reco_QQ_sizeLxyz, *b_Gen_QQ_sizeLxyz;
@@ -1862,16 +1872,22 @@ class EffMC {
     TF1 *gSingleMuWSTA, *gSingleMuWSTA_LowPt;
 
     // Lxy histo
-    TH1D *hGenLxyDiff[200], *hGenLxyRap[20], *hGenLxyPt[20], *hGenLxyCent[20], *hGenLxyA;
-    TH1D *hRecLxyDiff[200], *hRecLxyRap[20], *hRecLxyPt[20], *hRecLxyCent[20], *hRecLxyA;
-    TH1D *hEffLxyDiff[200], *hEffLxyRap[20], *hEffLxyPt[20], *hEffLxyCent[20];
+    TH1D *hGenLxyDiff[50], *hGenLxyRap[20], *hGenLxyPt[20], *hGenLxyCent[20], *hGenLxyA;
+    TH1D *hRecLxyDiff[50], *hRecLxyRap[20], *hRecLxyPt[20], *hRecLxyCent[20], *hRecLxyA;
+    TH1D *hEffLxyDiff[50], *hEffLxyRap[20], *hEffLxyPt[20], *hEffLxyCent[20];
     TH1D *hEffLxyA;
-    TH1D *hMeanLxy[200][30];
+    TH1D *hMeanLxy[50][30];
+
+    // Lxy gen histo to be smeared
+    TH2D *lxyzTrueReco[50];
+    int kreg[50];
+    TH1D *unfres, *ddist;
+    TH2D *ustatcov;
 
     // l_Jpsi histo
-    TH1D *hGenDiff[200], *hGenRap[20], *hGenPt[20], *hGenCent[20], *hGenA;
-    TH1D *hRecDiff[200], *hRecRap[20], *hRecPt[20], *hRecCent[20], *hRecA;
-    TH1D *hEffDiff[200], *hEffRap[20], *hEffPt[20], *hEffCent[20];
+    TH1D *hGenDiff[50], *hGenRap[20], *hGenPt[20], *hGenCent[20], *hGenA;
+    TH1D *hRecDiff[50], *hRecRap[20], *hRecPt[20], *hRecCent[20], *hRecA;
+    TH1D *hEffDiff[50], *hEffRap[20], *hEffPt[20], *hEffCent[20];
     TH1D *hEffA;
     
 
@@ -1884,7 +1900,241 @@ class EffMC {
     void LoopTree(const double *yarray, const double *ptarray, const int *centarray, const double *_ctauarray, const double *_ctauforwarray);
     void GetEfficiency();
     void SaveHistos(string str, const double *yarray, const double *ptarray, const int *centarray);
+    void Setkreg(const double ymin, const double ymax);
+    void Smearing(const double *yarray, const double *ptarray, const int *centarray);
+    void Drawing(const int);
 };
+
+void EffMC::Drawing(const int nidx) {
+  gROOT->Reset();
+  gROOT->SetStyle("Plain");
+  gStyle->SetOptStat(0);
+  gSystem->mkdir("figs/png",kTRUE);
+  gSystem->mkdir("figs/pdf",kTRUE);
+  
+  TLegend *leg = new TLegend(0.58,0.68,0.99,0.88);
+  leg->SetBorderSize(0);
+  leg->SetFillColor(0);
+  leg->SetFillStyle(0);
+  leg->AddEntry(unfres,"Unfolded Data","pl");
+  leg->AddEntry(hRecLxyDiff[0],"Reconstructed Data","pl");
+  leg->AddEntry(hGenLxyDiff[0],"True MC","pl");
+  
+  TLine *line = new TLine( 0.,1.,40.,1. );
+  line->SetLineStyle(2);
+  
+  string histname = hRecLxyDiff[nidx]->GetName();
+  
+  Int_t c_Canvas    = TColor::GetColor( "#ffffff" );
+  Int_t c_FrameFill = TColor::GetColor( "#fffffd" );
+  Int_t c_TitleBox  = TColor::GetColor( "#6D7B8D" );
+  Int_t c_TitleText = TColor::GetColor( "#FFFFFF" );
+  
+  TCanvas *c1 = new TCanvas("c1","c1",900,800);
+  c1->SetFrameFillColor( c_FrameFill );
+  c1->SetFillColor( c_Canvas );
+  c1->Divide(1,2);
+  TVirtualPad * c11 = c1->cd(1);
+  c11->SetFrameFillColor( c_FrameFill );
+  c11->SetFillColor( c_Canvas );
+
+  gStyle->SetTitleFillColor( c_TitleBox );
+  gStyle->SetTitleTextColor( c_TitleText );
+  gStyle->SetTitleBorderSize( 1 );
+  gStyle->SetTitleH( 0.062 );
+  gStyle->SetTitleX( c1->GetLeftMargin() );
+  gStyle->SetTitleY( 1 - c1->GetTopMargin() + gStyle->GetTitleH() );
+  gStyle->SetTitleW( 1 - c1->GetLeftMargin() - c1->GetRightMargin() );
+
+  TH1D* frame = new TH1D( *unfres);
+  frame->SetTitle( "Unfolding toy example with TSVDUnfold" );
+  frame->GetXaxis()->SetTitle( "Lxyz [mm]" );
+  frame->GetYaxis()->SetTitle( "Events" );
+  frame->GetXaxis()->SetTitleOffset( 1.25 );
+  frame->GetYaxis()->SetTitleOffset( 1.29 );
+  frame->Draw();
+
+  hRecLxyDiff[nidx]->SetLineStyle(2);
+  hRecLxyDiff[nidx]->SetLineColor(4);
+  hRecLxyDiff[nidx]->SetMarkerColor(4);
+  hRecLxyDiff[nidx]->SetLineWidth(2);
+  hRecLxyDiff[nidx]->SetMarkerStyle(kFullSquare);
+  unfres->SetMarkerStyle(kFullCircle);
+  hGenLxyDiff[nidx]->SetLineStyle(2);
+  hGenLxyDiff[nidx]->SetLineColor(8);
+  hGenLxyDiff[nidx]->SetMarkerColor(8);
+  hGenLxyDiff[nidx]->SetLineWidth(2);
+  hGenLxyDiff[nidx]->SetMarkerStyle(kFullSquare);
+
+  // add histograms
+  unfres->Draw("same");
+  hRecLxyDiff[nidx]->Draw("same");
+  hGenLxyDiff[nidx]->Draw("same");
+
+  leg->Draw();
+
+  // covariance matrix
+  gStyle->SetPalette(1,0);
+  TVirtualPad * c12 = c1->cd(2);
+  c12->Divide(2,1);
+  TVirtualPad * c2 = c12->cd(1);
+  c2->SetFrameFillColor( c_FrameFill );
+  c2->SetFillColor( c_Canvas );
+  c2->SetRightMargin( 0.15 );
+
+  ustatcov->SetTitle( "TSVDUnfold covariance matrix" );
+  ustatcov->GetXaxis()->SetTitle( "Lxyz(True)" );
+  ustatcov->GetYaxis()->SetTitle( "Lxyz(Reco)" );
+  ustatcov->GetXaxis()->SetTitleOffset( 1.25 );
+  ustatcov->GetYaxis()->SetTitleOffset( 1.29 );
+  ustatcov->SetLineWidth( 2 );
+  ustatcov->Draw( "colzsame" );
+
+  // distribution of the d quantity
+  TVirtualPad * c3 = c12->cd(2);
+  c3->SetLogy();
+
+  TH1D* dframe = new TH1D( *ddist );
+  dframe->SetTitle( "TSVDUnfold |d_{i}|" );
+  dframe->GetXaxis()->SetTitle( "i" );
+  dframe->GetYaxis()->SetTitle( "|d_{i}|" );
+  dframe->GetXaxis()->SetTitleOffset( 1.25 );
+  dframe->GetYaxis()->SetTitleOffset( 1.29 );
+  dframe->SetMinimum( 0.001 );
+  dframe->Draw();
+
+  ddist->SetLineWidth( 2 );
+  ddist->Draw( "same" );
+  line->Draw();
+
+  c1->SaveAs(Form("figs/png/%s.png",histname.c_str()));
+  c1->SaveAs(Form("figs/pdf/%s.pdf",histname.c_str()));
+  
+  delete c1;
+  delete frame;
+  delete dframe;
+  delete leg;
+  delete line;
+}
+
+void EffMC::Smearing(const double *yarray, const double *ptarray, const int *centarray) {
+
+  outfile = new TFile(Form("NPMC_eff_smearing.root"),"recreate");
+  outfile->cd();
+
+  for (int a=0; a<nbinsy-1; a++) {
+    for (int b=0; b<nbinspt-1; b++) {
+      for (int c=0; c<nbinscent-1; c++) {
+        double ymin=yarray[a]; double ymax=yarray[a+1];
+        double ptmin=ptarray[b]; double ptmax=ptarray[b+1];
+        int centmin=centarray[c]; int centmax=centarray[c+1];
+        int nidx = a*(nbinspt-1)*(nbinscent-1) + b*(nbinscent-1) + c;
+
+        TH2D *statcov = new TH2D(*lxyzTrueReco[nidx]);
+        for (int i=1; i<=hGenLxyDiff[nidx]->GetNbinsX(); i++) {
+          statcov->SetBinContent(i,i,TMath::Power(hGenLxyDiff[nidx]->GetBinError(i),2));
+        }
+        TSVDUnfold tsvdunf(hGenLxyDiff[nidx], statcov, hGenLxyDiff[nidx], hRecLxyDiff[nidx], lxyzTrueReco[nidx]); // smearing
+        // It is possible to normalise unfolded spectrum to unit area
+        tsvdunf.SetNormalize(kFALSE);
+        // kreg: larger kreg for finer grained unfolding & more fluctuations, smaller kreg for stronger regularisation & bias
+        // Unfolded histogram!
+        unfres = tsvdunf.Unfold(kreg[nidx]);
+        string histname = hGenLxyDiff[nidx]->GetName();
+        histname.erase(0,8); //drop prefix
+        unfres->SetName(Form("unfres_%s",histname.c_str()));
+        cout << "unfolding: " << nidx << " " << unfres << " " << unfres->GetName() << endl;
+        unfres->Write();
+        // Get the distribution of the d to cross check the regularization
+        // - choose kreg to be the point where |d_i| stop being statistically significantly >> 1`
+        ddist = tsvdunf.GetD();
+        ddist->SetName(Form("ddist_%s",histname.c_str()));
+        ddist->Write();
+        // Get the distribution of the singular values
+        TH1D *svdist = tsvdunf.GetSV();
+        svdist->SetName(Form("svdist_%s",histname.c_str()));
+        svdist->Write();
+        // Compute the error matrix for the unfolded spectrum using toy MC
+        // using the measured covariance matrix as input to generate the toys
+        // 100 toys should usually be enough
+        // The same method can be used for different covariance matrices separately.
+        ustatcov = tsvdunf.GetUnfoldCovMatrix( statcov, 100 );
+        ustatcov->SetName(Form("ustatcov_%s",histname.c_str()));
+        ustatcov->Write();
+        // Now compute the error matrix on the unfolded distribution originating
+        // from the finite detector matrix statistics
+        TH2D *uadetcov = tsvdunf.GetAdetCovMatrix(100);
+        // Sum up the two (they are uncorrelated)
+        ustatcov->Add( uadetcov );
+        uadetcov->SetName(Form("uadetcov_%s",histname.c_str()));
+        uadetcov->Write();
+        //Get the computed regularized covariance matrix (always corresponding to total uncertainty passed in constructor) and add uncertainties from finite MC statistics.
+        TH2D *utaucov = tsvdunf.GetXtau();
+        utaucov->Add( uadetcov );
+        utaucov->SetName(Form("utaucov_%s",histname.c_str()));
+        utaucov->Write();
+        //Get the computed inverse of the covariance matrix
+        TH2D *uinvcov = tsvdunf.GetXinv();
+        uinvcov->SetName(Form("uinvcov_%s",histname.c_str()));
+        uinvcov->Write();
+        // After unfolding/smearing is done, draw plots
+        Drawing(nidx);
+       
+        string name = hRecLxyDiff[nidx]->GetName();
+        name.erase(name.begin(),name.begin()+4);
+        name.insert(0,"hEff");
+        cout << "name " << name << endl;
+        cout << "unfres " << unfres << endl;
+        cout << " " << unfres->GetName();
+        hEffLxyDiff[nidx] = new TH1D(*hRecLxyDiff[nidx]);
+        hEffLxyDiff[nidx]->SetName(name.c_str());
+        cout << "hEffLxyDiff " << nidx << " " << hEffLxyDiff[nidx]->GetName() << endl;
+        cout << "before calculating efficiency, " << hRecLxyDiff[nidx]->GetName();
+        cout << " " << unfres->GetName();
+        cout << " " << hEffLxyDiff[nidx]->GetName() << endl;
+        getCorrectedEffErr(hRecLxyDiff[nidx],unfres,hEffLxyDiff[nidx]); // smeared histogram for efficiency
+        
+        hGenLxyDiff[nidx]->Write();
+        hRecLxyDiff[nidx]->Write();
+        hEffLxyDiff[nidx]->Write();
+        lxyzTrueReco[nidx]->Write();
+        
+        delete ustatcov;
+//        delete uadetcov;
+//        delete utaucov;
+//        delete uinvcov;
+//        delete statcov;
+//        delete ddist;
+//        delete svdist;
+      }
+    }
+  }
+
+  outfile->Close();
+}
+
+void EffMC::Setkreg(const double ymin, const double ymax) {
+  // Lxyz histograms in |y|<1.6 : 21 histos, |y|>1.6 : 12 histos
+  const int midrap[21] = {
+    5, 7, 8, 8, 8, 8, 8,
+    6, 7, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8
+  };
+  const int forrap[12] = {
+    8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8 
+  };
+
+  if ( (ymin==0.0 && ymax==1.6) || (ymin==-1.6 && ymax==0) ) {
+    for (int i=0; i<21; i++) {
+      kreg[i] = midrap[i];
+    }
+  } else {
+    for (int i=0; i<12; i++) {
+      kreg[i] = forrap[i];
+    }
+  }
+}
 
 EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, bool _npmc, bool _isPbPb, int _useTnP) {
   npmc = _npmc;
@@ -1903,7 +2153,7 @@ EffMC::EffMC(int _nFiles, string str1[], string str2[], string str3, bool abs, b
   isPbPb = _isPbPb;
   cout << "nFiles: " << nFiles << endl;
   useTnPCorr = _useTnP;
-  
+
 //  fileSinMuW = new TFile(str1[nFiles-2].c_str(),"read");
 //  fileSinMuW_LowPt = new TFile(str1[nFiles-1].c_str(),"read");
 }
@@ -1952,6 +2202,7 @@ EffMC::~EffMC() {
         delete hGenLxyDiff[nidx];
         delete hRecLxyDiff[nidx];
         delete hEffLxyDiff[nidx];
+        delete lxyzTrueReco[nidx];
         delete hGenDiff[nidx];
         delete hRecDiff[nidx];
         delete hEffDiff[nidx];
@@ -2118,6 +2369,8 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
 
   TH1::SetDefaultSumw2();
 
+  Setkreg(_ymin, _ymax); // kreg setting for smearing
+
   hGenLxyA = new TH1D(
       Form("hGenLxy1D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax),
       ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
@@ -2159,7 +2412,10 @@ void EffMC::CreateHistos(const int _nbinsy, const double *yarray, const int _nbi
             ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
         hRecLxyDiff[nidx] = new TH1D(
             Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
-            ";L_{xyz} (true) (mm)",nbinsctau-1,ctauarray);
+            ";L_{xyz} (reco) (mm)",nbinsctau-1,ctauarray);
+        lxyzTrueReco[nidx] = new TH2D(
+            Form("hLxyRecoTrue_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
+            ";L_{xyz} (true) (mm);L_{xyz} (reco) (mm)",nbinsctau-1,ctauarray,nbinsctau-1,ctauarray); // Adet
         hGenDiff[nidx] = new TH1D(
             Form("hGen_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax),
             ";#font[12]{l}_{J/#psi} (true) (mm)",nbinsctau-1,ctauarray);
@@ -2497,11 +2753,13 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
                 
                 if (isPbPb) {
                   hRecDiff[nidx]->Fill(dctau,weight*singleMuWeight*NcollWeight);
-                  hRecLxyDiff[nidx]->Fill(dlxy,weight*singleMuWeight*NcollWeight);
+                  hRecLxyDiff[nidx]->Fill(dlxyreco,weight*singleMuWeight*NcollWeight); // for smearing ..
+                  // True-Reco map is Adet in the example code -> Fill map only if event is reconstructed
+                  lxyzTrueReco[nidx]->Fill(dlxy,dlxyreco,weight*singleMuWeight*NcollWeight);
 //                  cout << "REC dlxy | w " << dlxy << " " << weight*singleMuWeight*NcollWeight << endl;
                 } else {
                   hRecDiff[nidx]->Fill(dctau,singleMuWeight);
-                  hRecLxyDiff[nidx]->Fill(dlxy,singleMuWeight);
+                  hRecLxyDiff[nidx]->Fill(dlxyreco,singleMuWeight);
                 }
                   
                 for (int d=0; d<nbinsctau-1; d++) {
@@ -2699,8 +2957,8 @@ void EffMC::LoopTree(const double *yarray, const double *ptarray, const int *cen
 
 void EffMC::GetEfficiency() {
   ////// Get Efficiency numbers
-  getCorrectedEffErr(nbinsctau-1,hRecLxyA,hGenLxyA,hEffLxyA);
-  getCorrectedEffErr(nbinsctau-1,hRecA,hGenA,hEffA);
+//  getCorrectedEffErr(hRecLxyA,hGenLxyA,hEffLxyA);
+//  getCorrectedEffErr(hRecA,hGenA,hEffA);
 
   for (int a=0; a<nbinsy-1; a++) {
     for (int b=0; b<nbinspt-1; b++) {
@@ -2710,59 +2968,53 @@ void EffMC::GetEfficiency() {
         name.erase(name.begin(),name.begin()+4);
         name.insert(0,"hEff");
         hEffDiff[nidx] = (TH1D*)hRecDiff[nidx]->Clone(name.c_str());
-        getCorrectedEffErr(nbinsctau-1,hRecDiff[nidx],hGenDiff[nidx],hEffDiff[nidx]);
-        name = hRecLxyDiff[nidx]->GetName();
-        name.erase(name.begin(),name.begin()+4);
-        name.insert(0,"hEff");
-        hEffLxyDiff[nidx] = (TH1D*)hRecLxyDiff[nidx]->Clone(name.c_str());
-        getCorrectedEffErr(nbinsctau-1,hRecLxyDiff[nidx],hGenLxyDiff[nidx],hEffLxyDiff[nidx]);
-        cout << "graph nameLxy " << hRecLxyDiff[nidx]->GetName() << " " << name << endl;
+        getCorrectedEffErr(hRecDiff[nidx],hGenDiff[nidx],hEffDiff[nidx]);
       }
     }
   }
 
-  for (int i=0; i<nbinsy-1; i++) {
-    string name = hRecRap[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffRap[i] = (TH1D*)hRecRap[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecRap[i],hGenRap[i],hEffRap[i]);
-    name = hRecLxyRap[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffLxyRap[i] = (TH1D*)hRecLxyRap[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecLxyRap[i],hGenLxyRap[i],hEffLxyRap[i]);
-    cout << "graph nameLxy rap " << hRecLxyRap[i]->GetName() << " " << name << endl;
-    hEffLxyRap[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
-  }
-  for (int i=0; i<nbinspt-1; i++) {
-    string name = hRecPt[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffPt[i] = (TH1D*)hRecPt[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecPt[i],hGenPt[i],hEffPt[i]);
-    name = hRecLxyPt[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffLxyPt[i] = (TH1D*)hRecLxyPt[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecLxyPt[i],hGenLxyPt[i],hEffLxyPt[i]);
-    cout << "graph nameLxy pt " << hRecLxyPt[i]->GetName() << " " << name << endl;
-    hEffLxyPt[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
-  }
-  for (int i=0; i<nbinscent-1; i++) {
-    string name = hRecCent[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffCent[i] = (TH1D*)hRecCent[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecCent[i],hGenCent[i],hEffCent[i]);
-    name = hRecLxyCent[i]->GetName();
-    name.erase(name.begin(),name.begin()+4);
-    name.insert(0,"hEff");
-    hEffLxyCent[i] = (TH1D*)hRecLxyCent[i]->Clone(name.c_str());
-    getCorrectedEffErr(nbinsctau-1,hRecLxyCent[i],hGenLxyCent[i],hEffLxyCent[i]);
-    cout << "graph nameLxy cent " << hRecLxyCent[i]->GetName() << " " << name << endl;
-    hEffLxyCent[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
-  }
+//  for (int i=0; i<nbinsy-1; i++) {
+//    string name = hRecRap[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffRap[i] = (TH1D*)hRecRap[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecRap[i],hGenRap[i],hEffRap[i]);
+//    name = hRecLxyRap[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffLxyRap[i] = (TH1D*)hRecLxyRap[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecLxyRap[i],hGenLxyRap[i],hEffLxyRap[i]);
+//    cout << "graph nameLxy rap " << hRecLxyRap[i]->GetName() << " " << name << endl;
+//    hEffLxyRap[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//  }
+//  for (int i=0; i<nbinspt-1; i++) {
+//    string name = hRecPt[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffPt[i] = (TH1D*)hRecPt[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecPt[i],hGenPt[i],hEffPt[i]);
+//    name = hRecLxyPt[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffLxyPt[i] = (TH1D*)hRecLxyPt[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecLxyPt[i],hGenLxyPt[i],hEffLxyPt[i]);
+//    cout << "graph nameLxy pt " << hRecLxyPt[i]->GetName() << " " << name << endl;
+//    hEffLxyPt[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//  }
+//  for (int i=0; i<nbinscent-1; i++) {
+//    string name = hRecCent[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffCent[i] = (TH1D*)hRecCent[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecCent[i],hGenCent[i],hEffCent[i]);
+//    name = hRecLxyCent[i]->GetName();
+//    name.erase(name.begin(),name.begin()+4);
+//    name.insert(0,"hEff");
+//    hEffLxyCent[i] = (TH1D*)hRecLxyCent[i]->Clone(name.c_str());
+//    getCorrectedEffErr(hRecLxyCent[i],hGenLxyCent[i],hEffLxyCent[i]);
+//    cout << "graph nameLxy cent " << hRecLxyCent[i]->GetName() << " " << name << endl;
+//    hEffLxyCent[i]->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//  }
 
 }
  
@@ -2771,14 +3023,14 @@ void EffMC::SaveHistos(string str, const double *yarray, const double *ptarray, 
   outfile = new TFile(outFileName.c_str(),"recreate");
   outfile->cd();
 
-  hGenLxyA->Write();
+/*  hGenLxyA->Write();
   hRecLxyA->Write();
   hEffLxyA->Write();
 
   hGenA->Write();
   hRecA->Write();
   hEffA->Write();
-
+*/
   for (int a=0; a<nbinsy-1; a++) {
     for (int b=0; b<nbinspt-1; b++) {
       for (int c=0; c<nbinscent-1; c++) {
@@ -2787,9 +3039,6 @@ void EffMC::SaveHistos(string str, const double *yarray, const double *ptarray, 
         hGenDiff[nidx]->Write();
         hRecDiff[nidx]->Write();
         hEffDiff[nidx]->Write();
-        hGenLxyDiff[nidx]->Write();
-        hRecLxyDiff[nidx]->Write();
-        hEffLxyDiff[nidx]->Write();
 
         if (isForwardLowpT(yarray[a], yarray[a+1], ptarray[b], ptarray[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
@@ -2805,33 +3054,33 @@ void EffMC::SaveHistos(string str, const double *yarray, const double *ptarray, 
     }
   }
 
-  for (int i=0; i<nbinsy-1; i++) {
-    hGenLxyRap[i]->Write();
-    hRecLxyRap[i]->Write();
-    hEffLxyRap[i]->Write();
-
-    hGenRap[i]->Write();
-    hRecRap[i]->Write();
-    hEffRap[i]->Write();
-  }
-  for (int i=0; i<nbinspt-1; i++) {
-    hGenLxyPt[i]->Write();
-    hRecLxyPt[i]->Write();
-    hEffLxyPt[i]->Write();
-
-    hGenPt[i]->Write();
-    hRecPt[i]->Write();
-    hEffPt[i]->Write();
-  }
-  for (int i=0; i<nbinscent-1; i++) {
-    hGenLxyCent[i]->Write();
-    hRecLxyCent[i]->Write();
-    hEffLxyCent[i]->Write();
-
-    hGenCent[i]->Write();
-    hRecCent[i]->Write();
-    hEffCent[i]->Write();
-  }
+//  for (int i=0; i<nbinsy-1; i++) {
+//    hGenLxyRap[i]->Write();
+//    hRecLxyRap[i]->Write();
+//    hEffLxyRap[i]->Write();
+//
+//    hGenRap[i]->Write();
+//    hRecRap[i]->Write();
+//    hEffRap[i]->Write();
+//  }
+//  for (int i=0; i<nbinspt-1; i++) {
+//    hGenLxyPt[i]->Write();
+//    hRecLxyPt[i]->Write();
+//    hEffLxyPt[i]->Write();
+//
+//    hGenPt[i]->Write();
+//    hRecPt[i]->Write();
+//    hEffPt[i]->Write();
+//  }
+//  for (int i=0; i<nbinscent-1; i++) {
+//    hGenLxyCent[i]->Write();
+//    hRecLxyCent[i]->Write();
+//    hEffLxyCent[i]->Write();
+//
+//    hGenCent[i]->Write();
+//    hRecCent[i]->Write();
+//    hEffCent[i]->Write();
+//  }
   outfile->Close();
 }
 

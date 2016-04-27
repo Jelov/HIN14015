@@ -78,8 +78,6 @@ static int useLxyzCorr = 2;
 //4: use y-pT eff map only in forward & low-pT region
 //5: same as 3, but use TH1D instead of TF1
 //6: same as 3, but use TGraphAsymmErrors instead of TF1
-//7: same as 3, but use toyMC(min integrated eff) - v2 systematics
-//8: same as 3, but use toyMC(max integrated eff) - v2 systematics
 static int useRapPtEff = 3;
 
 //0: apply ratio for 3D and 4D eff (default), 1: apply difference for 3D and 4D eff
@@ -95,10 +93,10 @@ static const double Jpsi_PtMin=3.0;
 static const double Jpsi_PtMax=30;
 static const double Jpsi_YMin=0;
 static const double Jpsi_YMax=2.4;
-static const double Jpsi_CtMin = -50.0;
-static const double Jpsi_CtMax = 50.0;
+static const double Jpsi_CtMin = -100.0;
+static const double Jpsi_CtMax = 100.0;
 static const double Jpsi_CtErrMin = 0.0;
-static const double Jpsi_CtErrMax = 1.0;
+static const double Jpsi_CtErrMax = 100.0;
 static const double Jpsi_PhiMin=-3.14159265359;
 static const double Jpsi_PhiMax=3.14159265359;
 static const double Jpsi_dPhiMin=Jpsi_PhiMin*2;
@@ -108,17 +106,17 @@ using namespace RooFit;
 using namespace std;
 
 static const double PDGJpsiM = 3.096916;
-const bool isPbPb = true;
+const bool isPbPb = false;
 
 // Binning for pT efficiency curves
-const int centarr[] = {0, 4, 8, 16, 40};
-const int centforwarr[] = {0, 4, 8, 16, 40};
-//const int centarr[] = {0, 40};
-//const int centforwarr[] = {0, 40};
-const double ptarr[] = {6.5, 7.5, 9.0, 11, 13, 16, 30.0};
-const double ptforwarr[] = {3.0, 4.5, 6.0, 7.5, 9.0, 11, 13, 16, 30.0};
+//const int centarr[] = {0, 4, 8, 16, 40};
+//const int centforwarr[] = {0, 4, 8, 16, 40};
+const int centarr[] = {0, 40};
+const int centforwarr[] = {0, 40};
+const double ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 30};
+const double ptforwarr[] = {3.0, 5, 6.5, 8.5, 10.5, 14.5, 30};
 const double raparr[] = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
-const double rapforwarr[] = {-2.4, -2.0, -1.6, 1.6, 2.0, 2.4};
+const double rapforwarr[] = {-2.4, -2.2, -2.0, -1.8, -1.6, 1.6, 1.8, 2.0, 2.2, 2.4};
 const unsigned int nCentArr = sizeof(centarr)/sizeof(int) -1;
 const unsigned int nCentForwArr = sizeof(centforwarr)/sizeof(int) -1;
 const unsigned int nPtArr = sizeof(ptarr)/sizeof(double) -1;
@@ -132,9 +130,9 @@ const unsigned int nHistForwEff = nCentForwArr * nPtForwArr * nRapForwArr;
 const int _centarr[] = {0, 40};
 const int _centforwarr[] = {0, 40};
 const double _ptarr[] = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-const double _ptforwarr[] = {3.0, 5.5, 6.5, 8.5, 11, 16, 30};
+const double _ptforwarr[] = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
 const double _raparr[] = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
-const double _rapforwarr[] = {-2.4, -2.0, -1.6, 1.6, 2.0, 2.4};
+const double _rapforwarr[] = {-2.4, -1.6, 1.6, 2.4};
 const unsigned int _nCentArr = sizeof(_centarr)/sizeof(int) -1;
 const unsigned int _nCentForwArr = sizeof(_centforwarr)/sizeof(int) -1;
 const unsigned int _nPtArr = sizeof(_ptarr)/sizeof(double) -1;
@@ -156,194 +154,6 @@ TH1D *heffCentSai[nHistEff], *heffCentSai_LowPt[nHistEff];
 
 TH2D *hLxyCtau[nHistEff], *hLxyCtau_LowPt[nHistEff];
 TH2D *hLxyCtau2[10];
-
-string fitfunc_min[nRapArr * nCentArr] = {
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent0-4_GASM
-"106.481*TMath::Erf((x--14.8372)/10.4122)+-105.858",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent4-8_GASM
-"31.5088*TMath::Erf((x--55.0034)/34.8251)+-30.7247",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent8-16_GASM
-"4.74156*TMath::Erf((x--9.84849)/12.6077)+-4.07249",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent16-40_GASM
-"142.653*TMath::Erf((x--34.8581)/19.4314)+-141.94",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent0-4_GASM
-"0.908312*TMath::Erf((x-4.23279)/6.62284)+-0.146621",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent4-8_GASM
-"46.0973*TMath::Erf((x--20.9959)/15.4311)+-45.2913",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent8-16_GASM
-"325.037*TMath::Erf((x--19.8335)/11.8007)+-324.273",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent16-40_GASM
-"1.49*TMath::Erf((x-1.45279)/7.30568)+-0.711975",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent0-4_GASM
-"214.816*TMath::Erf((x--17.5747)/11.5187)+-214.05",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent4-8_GASM
-"214.91*TMath::Erf((x--20.9471)/13.1092)+-214.11",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent8-16_GASM
-"325.635*TMath::Erf((x--25.2187)/14.7121)+-324.815",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent16-40_GASM
-"69.5525*TMath::Erf((x--14.3849)/11.5003)+-68.7436",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent0-4_GASM
-"3.68862*TMath::Erf((x--0.608145)/7.68558)+-2.90104",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent4-8_GASM
-"0.370499*TMath::Erf((x-8.14597)/3.92333)+0.407311",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent8-16_GASM
-"6.44023*TMath::Erf((x--5.2901)/9.85714)+-5.64613",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent16-40_GASM
-"265.769*TMath::Erf((x--19.7875)/12.4549)+-264.96",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent0-4_GASM
-"2.1171*TMath::Erf((x-0.709647)/7.46813)+-1.37915",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent4-8_GASM
-"251.133*TMath::Erf((x--19.4843)/11.7765)+-250.41",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent8-16_GASM
-"1.33608*TMath::Erf((x-2.9251)/6.0507)+-0.59628",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent16-40_GASM
-"112.28*TMath::Erf((x--23.0723)/14.8772)+-111.503",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent0-4_GASM
-"0.586483*TMath::Erf((x-3.93084)/7.29001)+0.0393527",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent4-8_GASM
-"145.837*TMath::Erf((x--43.1395)/23.0171)+-145.151",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent8-16_GASM
-"348.199*TMath::Erf((x--32.9351)/16.8395)+-347.564",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent16-40_GASM
-"332.898*TMath::Erf((x--34.7199)/17.7434)+-332.237"
-};
-
-string fitfunc_max[nRapArr * nCentArr] = {
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent0-4_GASM
-"106.471*TMath::Erf((x--7.90353)/7.2643)+-105.872",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent4-8_GASM
-"31.4744*TMath::Erf((x--23.1478)/17.1367)+-30.7856",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent8-16_GASM
-"44.6761*TMath::Erf((x--21.1208)/15.1788)+-43.9846",
-//h1DEffPt_PRJpsi_Rap-1.6--1.2_Pt6.5-30.0_Cent16-40_GASM
-"142.643*TMath::Erf((x--28.3422)/16.6171)+-141.95",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent0-4_GASM
-"51.7438*TMath::Erf((x--13.3069)/11.3823)+-51.0132",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent4-8_GASM
-"46.0836*TMath::Erf((x--11.7728)/10.6469)+-45.317",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent8-16_GASM
-"325.025*TMath::Erf((x--12.7688)/8.86425)+-324.286",
-//h1DEffPt_PRJpsi_Rap-1.2--0.8_Pt6.5-30.0_Cent16-40_GASM
-"1.50883*TMath::Erf((x-2.62771)/6.5082)+-0.723883",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent0-4_GASM
-"214.817*TMath::Erf((x--16.0025)/11.0044)+-214.05",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent4-8_GASM
-"214.908*TMath::Erf((x--17.4207)/11.6933)+-214.114",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent8-16_GASM
-"325.624*TMath::Erf((x--19.0573)/12.0085)+-324.827",
-//h1DEffPt_PRJpsi_Rap-0.8-0.0_Pt6.5-30.0_Cent16-40_GASM
-"69.5456*TMath::Erf((x--10.7857)/9.67685)+-68.7543",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent0-4_GASM
-"3.68158*TMath::Erf((x--0.410094)/7.70849)+-2.91272",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent4-8_GASM
-"3.56861*TMath::Erf((x-0.382273)/6.99949)+-2.79101",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent8-16_GASM
-"6.45003*TMath::Erf((x--2.32508)/7.90458)+-5.66054",
-//h1DEffPt_PRJpsi_Rap0.0-0.8_Pt6.5-30.0_Cent16-40_GASM
-"265.771*TMath::Erf((x--21.2022)/13.1459)+-264.958",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent0-4_GASM
-"2.14525*TMath::Erf((x-1.99332)/6.62147)+-1.38278",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent4-8_GASM
-"251.137*TMath::Erf((x--15.6179)/10.3774)+-250.407",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent8-16_GASM
-"0.715567*TMath::Erf((x-6.10271)/3.72643)+-0.00279617",
-//h1DEffPt_PRJpsi_Rap0.8-1.2_Pt6.5-30.0_Cent16-40_GASM
-"112.293*TMath::Erf((x--17.3989)/12.3514)+-111.495",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent0-4_GASM
-"0.205921*TMath::Erf((x-9.36133)/3.10009)+0.383222",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent4-8_GASM
-"145.851*TMath::Erf((x--42.1658)/23.4133)+-145.137",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent8-16_GASM
-"348.197*TMath::Erf((x--22.4351)/12.7214)+-347.567",
-//h1DEffPt_PRJpsi_Rap1.2-1.6_Pt6.5-30.0_Cent16-40_GASM
-"332.887*TMath::Erf((x--23.9643)/13.3694)+-332.249"
-};
-
-string fitfunc_min_LowPt[nRapForwArr * nCentForwArr] = {
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent0-4_GASM
-"0.169765*TMath::Erf((x-4.68277)/4.55015)+0.162752",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent4-8_GASM
-"0.20068*TMath::Erf((x-5.19599)/5.68531)+0.177815",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent8-16_GASM
-"0.185565*TMath::Erf((x-4.65544)/2.70228)+0.193694",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent16-40_GASM
-"0.182279*TMath::Erf((x-5.02509)/1.67875)+0.222152",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent0-4_GASM
-"0.249954*TMath::Erf((x-5.97662)/3.70536)+0.20895",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent4-8_GASM
-"0.306223*TMath::Erf((x-4.69931)/4.82626)+0.174838",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent8-16_GASM
-"0.316677*TMath::Erf((x-4.50426)/4.69977)+0.176749",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent16-40_GASM
-"0.237422*TMath::Erf((x-4.9129)/1.79721)+0.236304",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent0-4 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent4-8 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent8-16 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent16-40 : needs to be skipped
-"x",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent0-4_GASM
-"0.700598*TMath::Erf((x--0.397142)/10.1278)+-0.203814",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent4-8_GASM
-"0.261241*TMath::Erf((x-5.24936)/4.29254)+0.210498",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent8-16_GASM
-"0.413606*TMath::Erf((x-3.01139)/6.60264)+0.0834922",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent16-40_GASM
-"0.303841*TMath::Erf((x-4.36867)/3.42211)+0.195678",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent0-4_GASM
-"0.757192*TMath::Erf((x--11.4894)/19.4769)+-0.406281",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent4-8_GASM
-"0.16448*TMath::Erf((x-5.19729)/2.12894)+0.167299",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent8-16_GASM
-"0.262167*TMath::Erf((x-3.07265)/6.38892)+0.134741",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent16-40_GASM
-"0.228193*TMath::Erf((x-2.8978)/4.35902)+0.1494"
-};
-
-string fitfunc_max_LowPt[nRapForwArr * nCentForwArr] = {
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent0-4_GASM
-"0.160934*TMath::Erf((x-5.51027)/3.56603)+0.165625",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent4-8_GASM
-"0.173965*TMath::Erf((x-6.76239)/3.12455)+0.216076",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent8-16_GASM
-"0.191761*TMath::Erf((x-5.02068)/3.23016)+0.192953",
-//h1DEffPt_PRJpsi_Rap-2.4--2.0_Pt3.0-30.0_Cent16-40_GASM
-"0.17836*TMath::Erf((x-4.72263)/2.11809)+0.22865",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent0-4_GASM
-"0.264057*TMath::Erf((x-5.72519)/4.38311)+0.210879",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent4-8_GASM
-"0.334264*TMath::Erf((x-4.69525)/6.36364)+0.171674",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent8-16_GASM
-"0.261883*TMath::Erf((x-5.80821)/3.59948)+0.227803",
-//h1DEffPt_PRJpsi_Rap-2.0--1.6_Pt3.0-30.0_Cent16-40_GASM
-"0.241573*TMath::Erf((x-5.22982)/1.85577)+0.241418",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent0-4 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent4-8 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent8-16 : needs to be skipped
-"x",
-//Rap-1.6-1.6_Pt3.0-30.0_Cent16-40 : needs to be skipped
-"x",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent0-4_GASM
-"0.207192*TMath::Erf((x-6.43589)/1.59396)+0.227105",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent4-8_GASM
-"0.210173*TMath::Erf((x-6.26577)/2.13962)+0.232887",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent8-16_GASM
-"0.255617*TMath::Erf((x-5.73705)/3.24177)+0.22751",
-//h1DEffPt_PRJpsi_Rap1.6-2.0_Pt3.0-30.0_Cent16-40_GASM
-"0.260821*TMath::Erf((x-5.36486)/2.68753)+0.231312",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent0-4_GASM
-"0.14597*TMath::Erf((x-6.8138)/3.35437)+0.178964",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent4-8_GASM
-"0.152551*TMath::Erf((x-5.67714)/0.734688)+0.177915",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent8-16_GASM
-"0.189454*TMath::Erf((x-5.56577)/3.13749)+0.200219",
-//h1DEffPt_PRJpsi_Rap2.0-2.4_Pt3.0-30.0_Cent16-40_GASM
-"0.193597*TMath::Erf((x-4.39757)/2.76911)+0.191164"
-};
 
 // Variables for a dimuon
 struct Condition {
@@ -453,22 +263,32 @@ int main(int argc, char* argv[]) {
   cout << "end event #: " << nevt << endl;
 
 
-  TFile *file=TFile::Open(fileName.c_str());
-  TTree *Tree=(TTree*)file->Get("myTree");
-  if (!file->IsOpen() || Tree==NULL ) {
-    cout << "Cannot open the input file. exit"<< endl;
-    return -3;
+  TChain *Tree = new TChain("myTree");
+  if (isPbPb) {
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt03_Histos_cmssw445p5_RegIt_hStats.root");
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt36_Histos_cmssw445p5_RegIt_hStats.root");
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt69_Histos_cmssw445p5_RegIt_hStats.root");
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt912_Histos_cmssw445p5_RegIt_hStats.root");
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1215_Histos_cmssw445p5_RegIt_hStats.root");
+    Tree->AddFile("/home/mihee/cms/oniaTree/2011PbPb/bJpsiMuMu_JpsiPt1530_Histos_cmssw445p5_RegIt_hStats.root");
+  } else {
+    Tree->AddFile("/home/mihee/cms/oniaTree/2013pp/NPMC_Histos_2013pp_GlbGlb_STARTHI53_V28-v1_GenCtau_muLessPV.root");
   }
 
-
   // Settings for Lxyz information imports to normal onia tree
-  TFile *fileLxyz;
-  TTree *TreeLxyz;
+  TChain *TreeLxyz = new TChain("myTree");
   if (use3DCtau) {
-    if (isPbPb) fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2011PbPb/Jpsi_Histos_3Mu_v2.root");
-    else fileLxyz=TFile::Open("/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_GlbGlb_Jpsi_Histos_3Mu_v1.root");
+    if (isPbPb) {
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt03_Histos_v1.root");
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt36_Histos_v1.root");
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt69_Histos_v1.root");
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt912_Histos_v1.root");
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1215_Histos_v1.root");
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2011PbPb/originalTree/Lxyz_bJpsiMuMu_JpsiPt1530_Histos_v1.root");
+    } else {
+      TreeLxyz->AddFile("/home/mihee/cms/oniaTree/2013pp/Lxyz_2013PPMuon_bjpsiMuMu_GlbGlb_Histos_v1.root");
+    }
 
-    TreeLxyz = (TTree*)fileLxyz->Get("myTree");
   }
 
   unsigned int eventNbLxyz, runNbLxyz, LSLxyz;
@@ -558,29 +378,23 @@ int main(int argc, char* argv[]) {
   TF1 *gSingleMuWSTA_LowPt;
   if (useTnPCorr==1) {
     gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor"),
-    "(0.9555*TMath::Erf((x-1.3240)/2.5683))/(0.9576*TMath::Erf((x-1.7883)/2.6583))");
+    "(0.9588*TMath::Erf((x-2.0009)/1.8998))/(0.9604*TMath::Erf((x-2.0586)/2.1567))");
     gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_LowPt"),
-    "(0.8335*TMath::Erf((x-1.2470)/1.9782))/(0.7948*TMath::Erf((x-1.3091)/2.2783))");
+    "(0.7897*TMath::Erf((x-0.7162)/2.6261))/(0.7364*TMath::Erf((x-1.2149)/2.3352))");
   } else if (useTnPCorr==2 || useTnPCorr==3) {
     gSingleMuW[0] = new TF1(Form("TnP_ScaleFactor_Rap0.0-0.9"),
-    "(0.9646*TMath::Erf((x-0.1260)/3.5155))/(0.9724*TMath::Erf((x-0.4114)/3.3775))");
+    "(0.9452*TMath::Erf((x-1.9895)/1.6646))/(0.9547*TMath::Erf((x-1.7776)/2.0497))");
     gSingleMuW[1] = new TF1(Form("TnP_ScaleFactor_Rap0.9-1.6"),
-    "(0.9725*TMath::Erf((x-1.0054)/2.3187))/(0.9502*TMath::Erf((x-1.3857)/2.0757))");
+    "(0.9296*TMath::Erf((x-1.8082)/1.4939))/(0.9150*TMath::Erf((x-1.8502)/1.6651))");
     gSingleMuW_LowPt[0] = new TF1(Form("TnP_ScaleFactor_Rap1.6-2.1"),
-    "(0.9194*TMath::Erf((x-0.9733)/2.1374))/(0.8971*TMath::Erf((x-1.0984)/2.3510))");
+    "(0.8808*TMath::Erf((x-0.8275)/2.6569))/(0.8721*TMath::Erf((x-1.1449)/2.5504))");
     gSingleMuW_LowPt[1] = new TF1(Form("TnP_ScaleFactor_Rap2.1-2.4"),
-    "(0.8079*TMath::Erf((x-0.9421)/0.8577))/(0.7763*TMath::Erf((x-0.8419)/1.6742))");
+    "(0.7180*TMath::Erf((x-0.8578)/0.8700))/(0.6137*TMath::Erf((x-1.0202)/1.0729))");
 
-    // pp SFs
     gSingleMuWSTA = new TF1(Form("TnP_ScaleFactor_STA"),
     "(0.9891*TMath::Erf((x-1.4814)/2.5014))/(0.9911*TMath::Erf((x-1.4336)/2.8548))");
     gSingleMuWSTA_LowPt = new TF1(Form("TnP_ScaleFactor_STA_LowPt"),
     "(0.8956*TMath::Erf((x-0.5162)/1.7646))/(0.9132*TMath::Erf((x-0.8045)/1.8366))");
-    // PbPb SFs (not used)
-//    gSingleMuWSTA = new TF1(Form("TnP_ScaleFactor_STA"),
-//    "(1.0000*TMath::Erf((x-1.3923)/2.3653))/(1.0000*TMath::Erf((x-1.5330)/2.8467))");
-//    gSingleMuWSTA_LowPt = new TF1(Form("TnP_ScaleFactor_STA_LowPt"),
-//    "(1.0000*TMath::Erf((x-0.0000)/2.5236))/(0.9523*TMath::Erf((x-0.7714)/2.0628))");
   }
 
   if (doWeighting) {
@@ -609,10 +423,10 @@ int main(int argc, char* argv[]) {
 
     if (trigType == 3 || trigType == 4) {
       if (isPbPb) {
-        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEta_noTnPCorr_root604/ctau2mm/FinalEfficiency_pbpb_notAbs.root");
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEta_noTnPCorr_root604/FinalEfficiency_pbpb_notAbs.root");
         else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/PbPb/RecoLxyEff_RegionsDividedInEtaLxyBin2/FinalEfficiency_pbpb_notAbs.root");
       } else {
-        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEta_noTnPCorr_root604/ctau2mm/FinalEfficiency_pp_notAbs.root");
+        if (use3DCtau) sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEta_noTnPCorr_root604/FinalEfficiency_pp_notAbs.root");
         else sprintf(effHistname,"/home/mihee/cms/RegIt_JpsiRaa/datasets/pp/RecoLxyEff_RegionsDividedInEtaLxy/FinalEfficiency_pp_notAbs.root");
       }
       cout << effHistname << endl;
@@ -648,13 +462,13 @@ int main(int argc, char* argv[]) {
       cout << effHistname << endl;
       effFilepT_Minus_ForwHighPt = new TFile(effHistname);
 
-//      if (!effFileLxy->IsOpen() ||
-//          !effFilepT->IsOpen() || !effFilepT_LowPt->IsOpen() || !effFilepT_ForwHighPt->IsOpen() ||
-//          !effFilepT_Minus->IsOpen() || !effFilepT_Minus_LowPt->IsOpen() || !effFilepT_Minus_ForwHighPt->IsOpen()
-//         ) {
-//        cout << "CANNOT read efficiency root files. Exit." << endl;
-//        return -4;
-//      }
+      if (!effFileLxy->IsOpen() ||
+          !effFilepT->IsOpen() || !effFilepT_LowPt->IsOpen() || !effFilepT_ForwHighPt->IsOpen() ||
+          !effFilepT_Minus->IsOpen() || !effFilepT_Minus_LowPt->IsOpen() || !effFilepT_Minus_ForwHighPt->IsOpen()
+         ) {
+        cout << "CANNOT read efficiency root files. Exit." << endl;
+        return -4;
+      }
 
     }
 
@@ -672,18 +486,10 @@ int main(int argc, char* argv[]) {
           else
             heffPt[nidx] = (TH1D*)effFilepT->Get(fitname.c_str());
           fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_TF",raparr[a],raparr[a+1],centarr[c],centarr[c+1]);
-          if (useRapPtEff==7) {
-            feffPt[nidx] = new TF1(fitname.c_str(),fitfunc_min[nidx].c_str(),6.5,30);
-            cout << "\t\t feffPt["<<nidx<<"] " << fitfunc_min[nidx] << "\t" << feffPt[nidx]->Eval(6.5) << endl;
-          } else if (useRapPtEff==8) {
-            feffPt[nidx] = new TF1(fitname.c_str(),fitfunc_max[nidx].c_str(),6.5,30);
-            cout << "\t\t feffPt["<<nidx<<"] " << fitfunc_max[nidx] << "\t" << feffPt[nidx]->Eval(6.5) << endl;
-          } else { // nominal
-            if (raparr[a]<=0 && raparr[a+1]<=0)
-              feffPt[nidx] = (TF1*)effFilepT_Minus->Get(fitname.c_str());
-            else
-              feffPt[nidx] = (TF1*)effFilepT->Get(fitname.c_str());
-          }
+          if (raparr[a]<=0 && raparr[a+1]<=0)
+            feffPt[nidx] = (TF1*)effFilepT_Minus->Get(fitname.c_str());
+          else
+            feffPt[nidx] = (TF1*)effFilepT->Get(fitname.c_str());
           fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_GASM",raparr[a],raparr[a+1],centarr[c],centarr[c+1]);
           if (raparr[a]<=0 && raparr[a+1]<=0)
             geffPt[nidx] = (TGraphAsymmErrors*)effFilepT_Minus->Get(fitname.c_str());
@@ -755,18 +561,10 @@ int main(int argc, char* argv[]) {
             else
               heffPt_LowPt[nidx] = (TH1D*)effFilepT_LowPt->Get(fitname.c_str());
             fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt3.0-30.0_Cent%d-%d_TF",rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
-            if (useRapPtEff==7) {
-              feffPt_LowPt[nidx] = new TF1(fitname.c_str(),fitfunc_min_LowPt[nidx].c_str(),3,30);
-              cout << "\t\t feffPt_LowPt["<<nidx<<"] " << fitfunc_min_LowPt[nidx] << "\t" << feffPt_LowPt[nidx]->Eval(6.5) << endl;
-            } else if (useRapPtEff==8) {
-              feffPt_LowPt[nidx] = new TF1(fitname.c_str(),fitfunc_max_LowPt[nidx].c_str(),3,30);
-              cout << "\t\t feffPt_LowPt["<<nidx<<"] " << fitfunc_max_LowPt[nidx] << "\t" << feffPt_LowPt[nidx]->Eval(6.5) << endl;
-            } else { // nominal
-              if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
-                feffPt_LowPt[nidx] = (TF1*)effFilepT_Minus_LowPt->Get(fitname.c_str());
-              else
-                feffPt_LowPt[nidx] = (TF1*)effFilepT_LowPt->Get(fitname.c_str());
-            }
+            if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
+              feffPt_LowPt[nidx] = (TF1*)effFilepT_Minus_LowPt->Get(fitname.c_str());
+            else
+              feffPt_LowPt[nidx] = (TF1*)effFilepT_LowPt->Get(fitname.c_str());
             fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt3.0-30.0_Cent%d-%d_GASM",rapforwarr[a],rapforwarr[a+1],centforwarr[c],centforwarr[c+1]);
             if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
               geffPt_LowPt[nidx] = (TGraphAsymmErrors*)effFilepT_Minus_LowPt->Get(fitname.c_str());
@@ -797,16 +595,16 @@ int main(int argc, char* argv[]) {
           else
             heffPt_ForwHighPt[nidx] = (TH1D*)effFilepT_ForwHighPt->Get(fitname.c_str());
           fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_TF",rapforwarr[a],rapforwarr[a+1],centarr[c],centarr[c+1]);
-//          if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
-//            feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
-//          else
-//            feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_ForwHighPt->Get(fitname.c_str());
+          if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
+            feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
+          else
+            feffPt_ForwHighPt[nidx] = (TF1*)effFilepT_ForwHighPt->Get(fitname.c_str());
           fitname = Form("h1DEffPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d_GASM",rapforwarr[a],rapforwarr[a+1],centarr[c],centarr[c+1]);
           if (rapforwarr[a]<=0 && rapforwarr[a+1]<=0)
             geffPt_ForwHighPt[nidx] = (TGraphAsymmErrors*)effFilepT_Minus_ForwHighPt->Get(fitname.c_str());
           else
             geffPt_ForwHighPt[nidx] = (TGraphAsymmErrors*)effFilepT_ForwHighPt->Get(fitname.c_str());
-//          cout << "\t" << nidx << " feffPt_ForwHighPt: " << feffPt_ForwHighPt[nidx] << " " << heffPt_ForwHighPt[nidx] << endl;
+          cout << "\t" << nidx << " feffPt_ForwHighPt: " << feffPt_ForwHighPt[nidx] << " " << heffPt_ForwHighPt[nidx] << endl;
 //          cout << "\t" << nidx <<  feffPt_ForwHighPt[nidx]->GetName() << " " << heffPt_ForwHighPt[nidx]->GetName() << endl;
           fitname = Form("h1DEmptyPt_PRJpsi_Rap%.1f-%.1f_Pt6.5-30.0_Cent%d-%d",rapforwarr[a],rapforwarr[a+1],centarr[c],centarr[c+1]);
           heffEmpty_LowPt[nidx] = new TH1D(fitname.c_str(),"#varepsilon #leq 0;p_{T} (GeV/c);Counts",14,2.0,30.0);
@@ -935,7 +733,7 @@ int main(int argc, char* argv[]) {
   int             HLTriggers; 
 //  Int_t           Gen_QQ_size;
 //  Int_t           Gen_QQ_type[100];
-//  Float_t         Reco_QQ_ctauTrue[100];   //[Reco_QQ_size]
+  Float_t         Reco_QQ_ctauTrue[100];   //[Reco_QQ_size]
 
   TBranch        *b_runNb;
   TBranch        *b_eventNb;
@@ -968,7 +766,7 @@ int main(int argc, char* argv[]) {
   TBranch        *b_zVtx;
 //  TBranch        *b_Gen_QQ_size;   //!
 //  TBranch        *b_Gen_QQ_type;
-//  TBranch        *b_Reco_QQ_ctauTrue;   //!
+  TBranch        *b_Reco_QQ_ctauTrue;   //!
 
   TLorentzVector* JP= new TLorentzVector;
   TLorentzVector* m1P= new TLorentzVector;
@@ -1002,7 +800,7 @@ int main(int argc, char* argv[]) {
   RooCategory* Jpsi_Type;
   RooCategory* Jpsi_Sign;
   RooRealVar* Jpsi_3DEff; //3D efficiency
-//  RooRealVar* Jpsi_CtTrue;
+  RooRealVar* Jpsi_CtTrue;
 //  RooCategory* MCType;
 
   Jpsi_Mass = new RooRealVar("Jpsi_Mass","J/#psi mass",Jpsi_MassMin,Jpsi_MassMax,"GeV/c^{2}");
@@ -1019,7 +817,7 @@ int main(int argc, char* argv[]) {
   Jpsi_3DEff = new RooRealVar("Jpsi_3DEff","J/#psi efficiency weight",1.,100.);
   Jpsi_Cent = new RooRealVar("Centrality","Centrality of the event",0,100);
 //  MCType = new RooCategory("MCType","Type of generated Jpsi_");
-//  Jpsi_CtTrue = new RooRealVar("Jpsi_CtTrue","J/#psi c#tau true",Jpsi_CtMin,Jpsi_CtMax,"mm");
+  Jpsi_CtTrue = new RooRealVar("Jpsi_CtTrue","J/#psi c#tau true",Jpsi_CtMin,Jpsi_CtMax,"mm");
 
   Jpsi_Type->defineType("GG",0);
   Jpsi_Type->defineType("GT",1);
@@ -1071,12 +869,12 @@ int main(int argc, char* argv[]) {
   Tree->SetBranchAddress("zVtx",&zVtx,&b_zVtx);
 //  Tree->SetBranchAddress("Gen_QQ_size", &Gen_QQ_size, &b_Gen_QQ_size);
 //  Tree->SetBranchAddress("Gen_QQ_type", Gen_QQ_type, &b_Gen_QQ_type);
-//  Tree->SetBranchAddress("Reco_QQ_ctauTrue", Reco_QQ_ctauTrue, &b_Reco_QQ_ctauTrue);
+  Tree->SetBranchAddress("Reco_QQ_ctauTrue", Reco_QQ_ctauTrue, &b_Reco_QQ_ctauTrue);
 
   // Without weighting
-  RooArgList varlist(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
-  RooArgList varlistSame(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
-  RooArgList varlist2(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//  RooArgList varlist(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//  RooArgList varlistSame(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//  RooArgList varlist2(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
 
   // With weighting
   RooArgList varlistW(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_3DEff,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
@@ -1084,18 +882,15 @@ int main(int argc, char* argv[]) {
   RooArgList varlist2W(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_3DEff,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
 
   // MC Templates
-//  RooArgList varlist(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_dPhi,*MCType,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
-//  RooArgList varlistSame(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_dPhi,*MCType,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
-//  RooArgList varlist2(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_dPhi,*MCType,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
+  RooArgList varlist(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
+  RooArgList varlistSame(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
+  RooArgList varlist2(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
 
   PassingEvent = new TH1I("NumPassingEvent",";;total number of events",1,1,2);
   dataJpsi = new RooDataSet("dataJpsi","A sample",varlist);
   dataJpsiSame = new RooDataSet("dataJpsiSame","A sample",varlistSame);
   if (doWeighting) {
     dataJpsiW = new RooDataSet("dataJpsiW","A sample",varlistW);
-    if (runType==8) {
-      dataJpsiW2 = new RooDataSet("dataJpsiW2","A sample",varlistW);
-    }
     dataJpsiSameW = new RooDataSet("dataJpsiSameW","A sample",varlistSameW);
   }
 
@@ -1224,7 +1019,7 @@ int main(int argc, char* argv[]) {
       Jpsi.mupl_norChi2_global = Reco_QQ_mupl_norChi2_global[i];
       Jpsi.mumi_norChi2_global = Reco_QQ_mumi_norChi2_global[i];
 //      Jpsi.genType = Gen_QQ_type[i];
-//      Jpsi.theCtTrue = Reco_QQ_ctauTrue[i];
+      Jpsi.theCtTrue = Reco_QQ_ctauTrue[i];
 
       Jpsi.theMass =JP->M();
       Jpsi.theRapidity=JP->Rapidity();
@@ -1436,7 +1231,6 @@ int main(int argc, char* argv[]) {
               for (unsigned int a=0; a<_nRapForwArr; a++) {
                 if (_rapforwarr[a]==-1.6 && _rapforwarr[a+1]==1.6) continue;
                 for (unsigned int b=0; b<_nPtForwArr; b++) {
-                  if (tmpPt<=6.5) {
                   for (unsigned int c=0; c<_nCentForwArr; c++) {
                     unsigned int nidx = a*_nPtForwArr*_nCentForwArr + b*_nCentForwArr + c;
                     if ( (Jpsi.theRapidity >= _rapforwarr[a] && Jpsi.theRapidity < _rapforwarr[a+1]) &&
@@ -1454,44 +1248,15 @@ int main(int argc, char* argv[]) {
                           theEffLxyAt0 = heffLxy_LowPt[nidx]->GetBinContent(1);
                         }
                          
-                        if (theEffLxy <= 0 || std::isnan(theEffLxy)) {
+                        if (theEffLxy <= 0) {
                           int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
                           // Get content from the previous bin
-                          while ((heffLxy_LowPt[nidx]->GetBinContent(binnumber)<=0) || (std::isnan(heffLxy_LowPt[nidx]->GetBinContent(binnumber)))) binnumber--;
+                          while (heffLxy_LowPt[nidx]->GetBinContent(binnumber)<=0) binnumber--;
                           theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber);
                           cout << "Low eff(Lxyz): " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
                         }
                         hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
                     }
-                  }
-                  } else { // forward & high pT (have different cent array)
-                  for (unsigned int c=0; c<_nCentArr; c++) {
-                    unsigned int nidx = a*_nPtForwArr*_nCentArr + b*_nCentArr + c;
-                    if ( (Jpsi.theRapidity >= _rapforwarr[a] && Jpsi.theRapidity < _rapforwarr[a+1]) &&
-                         (tmpPt >= _ptforwarr[b] && tmpPt < _ptforwarr[b+1]) &&
-                         (Centrality >= _centarr[c] && Centrality < _centarr[c+1])
-                     ) {
-                        if (useLxyzCorr==1) {
-                          cout << "\t" << feffLxy_LowPt[nidx]->GetName() << endl;
-                          theEffLxy = feffLxy_LowPt[nidx]->Eval(lxy);
-                          theEffLxyAt0 = feffLxy_LowPt[nidx]->Eval(0);
-                        } else if (useLxyzCorr==2) {
-                          cout << "\t" << heffLxy_LowPt[nidx]->GetName() << endl;
-                          int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
-                          theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber);
-                          theEffLxyAt0 = heffLxy_LowPt[nidx]->GetBinContent(1);
-                        }
-
-                        if (theEffLxy <= 0 || std::isnan(theEffLxy)) {
-                          int binnumber = heffLxy_LowPt[nidx]->FindBin(lxy);
-                          // Get content from the previous bin
-                          while ((heffLxy_LowPt[nidx]->GetBinContent(binnumber)<=0) || (std::isnan(heffLxy_LowPt[nidx]->GetBinContent(binnumber)))) binnumber--;
-                          theEffLxy = heffLxy_LowPt[nidx]->GetBinContent(binnumber);
-                          cout << "Low eff(Lxyz): " << feffLxy_LowPt[nidx]->Eval(lxy) << " & " << heffLxy_LowPt[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
-                        }
-                        hLxyCtau_LowPt[nidx]->Fill(lxy,Jpsi.theCt);
-                    }
-                  }
                   } // end of forw & high pt
 
                 }
@@ -1576,10 +1341,10 @@ int main(int argc, char* argv[]) {
                           theEffLxyAt0 = heffLxy[nidx]->GetBinContent(1);
                         }
                         
-                        if (theEffLxy <= 0 || std::isnan(theEffLxy)) {
+                        if (theEffLxy <= 0) {
                           int binnumber = heffLxy[nidx]->FindBin(lxy);
                           // Get content from the previous bin
-                          while ((heffLxy_LowPt[nidx]->GetBinContent(binnumber)<=0) || (std::isnan(heffLxy_LowPt[nidx]->GetBinContent(binnumber)))) binnumber--;
+                          while (heffLxy[nidx]->GetBinContent(binnumber)<=0) binnumber--;
                           theEffLxy = heffLxy[nidx]->GetBinContent(binnumber);
                           cout << "Low eff(Lxyz): " << feffLxy[nidx]->Eval(lxy) << " & " << heffLxy[nidx]->GetBinContent(binnumber) << " -> " << theEffLxy << endl;
                         }
@@ -1719,17 +1484,16 @@ int main(int argc, char* argv[]) {
           Jpsi_Cent->setVal(Jpsi.theCentrality);
           if (Jpsi.Jq == 0){ Jpsi_Sign->setIndex(Jpsi.Jq,kTRUE); }
           else { Jpsi_Sign->setIndex(Jpsi.Jq,kTRUE); }
-  //        Jpsi_CtTrue->setVal(Jpsi.theCtTrue);
+          Jpsi_CtTrue->setVal(Jpsi.theCtTrue);
   //        MCType->setIndex(Jpsi.genType,kTRUE);
 
-  //        RooArgList varlist_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_Sign,*MCType,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
-  //        RooArgList varlist2_tmp(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_Sign,*MCType,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
-  /*        RooArgList varlist_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_Sign,*Jpsi_Ct,*Jpsi_CtErr);
-          RooArgList varlist2_tmp(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_Type,*Jpsi_Sign,*Jpsi_Ct,*Jpsi_CtErr);*/
+          RooArgList varlist_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
+          RooArgList varlistSame_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
+          RooArgList varlist2_tmp(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_CtTrue);
           // Without weighting
-          RooArgList varlist_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
-          RooArgList varlistSame_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
-          RooArgList varlist2_tmp(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//          RooArgList varlist_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//          RooArgList varlistSame_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
+//          RooArgList varlist2_tmp(*Psip_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
           // With weighting
           RooArgList varlistW_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_3DEff,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
           RooArgList varlistSameW_tmp(*Jpsi_Mass,*Jpsi_Pt,*Jpsi_Y,*Jpsi_dPhi,*Jpsi_Cent,*Jpsi_3DEff,*Jpsi_Ct,*Jpsi_CtErr,*Jpsi_Lxyz);
@@ -1739,16 +1503,7 @@ int main(int argc, char* argv[]) {
           if (Jpsi.Jq == 0) {
             if (Jpsi.theMass < 3.5) {
               dataJpsi->add(varlist_tmp);
-              if (doWeighting) {
-                if (runType==8) {
-                  if (randomVar[ev]>0.5)
-                    dataJpsiW->add(varlistW_tmp);
-                  else
-                    dataJpsiW2->add(varlistW_tmp);
-                } else {
-                  dataJpsiW->add(varlistW_tmp);
-                }
-              }
+              if (doWeighting) dataJpsiW->add(varlistW_tmp);
               PassingEvent->Fill(1);
             }
           } else {
@@ -1925,9 +1680,6 @@ int main(int argc, char* argv[]) {
   // Perform the weighting on the dataset
   if (doWeighting) {
     dataJpsiWeight = new RooDataSet("dataJpsiWeight","A sample",*dataJpsiW->get(),Import(*dataJpsiW),WeightVar(*Jpsi_3DEff));
-    if (runType==8) {
-      dataJpsiWeight2 = new RooDataSet("dataJpsiWeight2","A sample",*dataJpsiW2->get(),Import(*dataJpsiW2),WeightVar(*Jpsi_3DEff));
-    }
     dataJpsiSameWeight = new RooDataSet("dataJpsiSameWeight","A sample",*dataJpsiSameW->get(),Import(*dataJpsiSameW),WeightVar(*Jpsi_3DEff));
   }
 
@@ -1943,10 +1695,6 @@ int main(int argc, char* argv[]) {
     dataJpsiSameW->Write();
     dataJpsiWeight->Write();
     dataJpsiSameWeight->Write();
-    if (runType==8) {
-      dataJpsiW2->Write();
-      dataJpsiWeight2->Write();
-    }
   }
 
 

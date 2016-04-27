@@ -952,11 +952,11 @@ int main(int argc, char *argv[]) {
   bool isPbPb = atoi(argv[3]);
 //  check3DHisto();
  
-  lJpsiEff_all(absRapidity, logy, isPbPb);
+//  lJpsiEff_all(absRapidity, logy, isPbPb);
   lJpsiEff_diff3D(absRapidity, logy, isPbPb);
-  lJpsiEff_diffRap(absRapidity, logy, isPbPb);
-  lJpsiEff_diffPt(absRapidity, logy, isPbPb);
-  lJpsiEff_diffCent(absRapidity, logy, isPbPb);
+//  lJpsiEff_diffRap(absRapidity, logy, isPbPb);
+//  lJpsiEff_diffPt(absRapidity, logy, isPbPb);
+//  lJpsiEff_diffCent(absRapidity, logy, isPbPb);
 
 //  lJpsiEff_resolRap(absRapidity, logy);
 //  lJpsiEff_resolPt(absRapidity, logy);

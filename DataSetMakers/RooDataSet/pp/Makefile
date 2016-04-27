@@ -25,12 +25,15 @@ RooHistPdfConv.o:	$(INCLUDEDIR)/RooHistPdfConv.cpp
 Tree2Datasets:	$(INCLUDEDIR)tree2Datasets.cpp
 	$(CPP) $(CPPFLAGS) -o Tree2Datasets $(GLIBS) $ $<
 
-Tree2DatasetsNoPtCorr:	$(INCLUDEDIR)tree2Datasets_noPtEffCorrection.cpp
-	$(CPP) $(CPPFLAGS) -o Tree2DatasetsNoPtCorr $(GLIBS) $ $<
+Tree2DatasetsMC:	$(INCLUDEDIR)tree2Datasets_mc.cpp
+	$(CPP) $(CPPFLAGS) -o Tree2DatasetsMC $(GLIBS) $ $<
 
 compEffUnfoldingProfile:	$(INCLUDEDIR)compEffUnfoldingProfile.cpp
 	$(CPP) $(CPPFLAGS) -o compEffUnfoldingProfile $(GLIBS) $ $<
 
 Fit2DDataPbPb:	$(INCLUDEDIR)fit2DData_pbpb.cpp
 	$(CPP) $(CPPFLAGS) -o Fit2DDataPbPb $(OUTLIB)/*.o $(GLIBS) $ $<
+
+RandomSets:	$(INCLUDEDIR)makeRandomSet.cpp
+	$(CPP) $(CPPFLAGS) -o RandomSets $(GLIBS) $ $<
 

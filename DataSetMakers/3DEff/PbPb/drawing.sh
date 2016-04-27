@@ -7,10 +7,17 @@ useTnP=0 #0: don't apply tnp, 1: old TnP, 2: new TnP with STA * (muID*trig), 3: 
 
 #directory1=(Rap0.0-1.6_Pt6.5-30.0 Rap0.0-2.4_Pt6.5-30.0 Rap1.6-2.4_Pt6.5-30.0 Rap1.6-2.4_Pt3.0-6.5 Rap1.6-2.4_Pt3.0-30.0)
 #directory1=(Rap1.6-2.4_Pt3.0-6.5 Rap1.6-2.4_Pt6.5-30.0 Rap1.6-2.4_Pt3.0-30.0) 
-#directory1=(Rap0.0-2.4_Pt6.5-30.0)
-#directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0) # notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap-2.4--1.6_Pt3.0-30.0)
+#directory2=(notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap-1.6-0.0_Pt6.5-30.0)
+#directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0)
+#directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0)
+directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
 #directory2=(notAbs_Rap-2.4--1.6_Pt3.0-6.5 notAbs_Rap1.6-2.4_Pt3.0-6.5 notAbs_Rap-2.4--1.6_Pt6.5-30.0 notAbs_Rap1.6-2.4_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
-directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-6.5 notAbs_Rap1.6-2.4_Pt3.0-6.5 notAbs_Rap-2.4--1.6_Pt6.5-30.0 notAbs_Rap1.6-2.4_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
+#directory2=(notAbs_Rap0.0-1.6_Pt6.5-30.0 notAbs_Rap-1.6-0.0_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-6.5 notAbs_Rap1.6-2.4_Pt3.0-6.5 notAbs_Rap-2.4--1.6_Pt6.5-30.0 notAbs_Rap1.6-2.4_Pt6.5-30.0 notAbs_Rap-2.4--1.6_Pt3.0-30.0 notAbs_Rap1.6-2.4_Pt3.0-30.0)
 #directory2=(notAbs_Rap1.6-2.4_Pt3.0-6.5 notAbs_Rap-2.4--1.6_Pt3.0-6.5)
 directory3=(Rap1.6-2.4_Pt6.5-30.0 Rap1.6-2.4_Pt3.0-6.5)
 motherdir=$(pwd)
@@ -27,12 +34,12 @@ function FillUpHistos {
   ln -s ../3DEff.cpp .
   ln -s ../LxyTrueReco.cpp .
   pwd
-  g++ 3DEff.cpp -o 3DEff `root-config --cflags --glibs` -lRooFit -lRooFitCore -lMinuit -lFoam -lMathMore -lNew
+  g++ 3DEff.cpp -o 3DEff `root-config --cflags --glibs`
   ./3DEff $absRap 0 $isPbPb $useTnP >&prmc3D.log&
   ./3DEff $absRap 1 $isPbPb $useTnP >&npmc3D.log&
-#  g++ lJpsiEff.cpp -o lJpsiEff `root-config --cflags --glibs` -lRooFit -lRooFitCore -lMinuit -lFoam -lMathMore -lNew
-#  ./lJpsiEff $absRap 0 $isPbPb $useTnP >&prmc.log&
-#  ./lJpsiEff $absRap 1 $isPbPb $useTnP >&npmc.log&
+  g++ lJpsiEff.cpp -o lJpsiEff `root-config --cflags --glibs` 
+  ./lJpsiEff $absRap 0 $isPbPb $useTnP >&prmc.log&
+  ./lJpsiEff $absRap 1 $isPbPb $useTnP >&npmc.log&
 }
 
 function DrawHistos {
@@ -46,8 +53,8 @@ function DrawHistos {
   ln -s ../lJpsiEff_draw.cpp .
   ln -s ../LxyEff_draw.cpp .
   pwd
-  g++ 3DEff_draw.cpp -o 3DEff_draw `root-config --cflags --glibs` -lRooFit -lRooFitCore -lMinuit -lFoam -lMathMore -lNew
-  g++ LxyEff_draw.cpp -o LxyEff_draw `root-config --cflags --glibs` -lRooFit -lRooFitCore -lMinuit -lFoam -lMathMore -lNew
+  g++ 3DEff_draw.cpp -o 3DEff_draw `root-config --cflags --glibs`
+  g++ LxyEff_draw.cpp -o LxyEff_draw `root-config --cflags --glibs`
 #    g++ lJpsiEff_draw.cpp -o lJpsiEff_draw $cflags $glibs
 #    ./lJpsiEff_draw $absRap $logy $isPbPb
   ./3DEff_draw $absRap $logy $isPbPb

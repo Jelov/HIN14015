@@ -1,328 +1,8 @@
 #include "lJpsiEff.h"
 #include "binArrays.h"
 
-bool checkEmptyBins(TH3 *hEff) {
-  bool empty=false;
-  for (int i=0; i<nbinsy-1; i++) {
-    for (int j=0; j<nbinspt-1; j++) {
-      for (int k=0; k<nbinsctau-1; k++) {
-        int idx = hEff->GetBin(i+1,j+1,k+1);
-        if (hEff->GetBinContent(idx)<=0 && k+1 != 1) { // Skip the first bin
-          empty = true;
-          cout << "\tGbin #" << idx << " : "
-               << hEff->GetXaxis()->GetBinLowEdge(i+1) << " : "
-               << hEff->GetYaxis()->GetBinLowEdge(j+1) << " : "
-               << hEff->GetZaxis()->GetBinLowEdge(k+1) << endl;
-        }
-      }
-    }
-  }
-
-  return empty;
-}
-
-void check3DHisto() {
-  gROOT->Macro("../JpsiStyle.C");
-  gStyle->SetOptStat(1);
-  
-  TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
-  TFile *PROut = TFile::Open("./PRMC_eff.root","read");
-  
-  for (int i=0; i<nbinscent-1; i++) {
-    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
-    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
-    int centmin=centarray[i]; int centmax=centarray[i+1];
-
-    string className = "NPJpsi";
-    TH3D *hNPEff = (TH3D*)NPOut->Get(Form("hEffLxy3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    className = "PRJpsi";
-    TH3D *hPREff = (TH3D*)PROut->Get(Form("hEffLxy3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    
-    className = "NPJpsi";
-    cout << "NPMC " << Form("hLxyEff3D_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax) << endl;
-    if (hNPEff) {
-      if (checkEmptyBins(hNPEff)) {
-        cout << "Has 0 efficiency at 1 or more bins" << endl;
-      }
-    } else {
-      cout << "Does NOT exist!!!!" << endl;
-    }
-    delete hNPEff;
-
-  }
-
-}
-
-void LxyEff_resolAll(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
-  gStyle->SetOptStat(1);
-  
-  TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
-  TFile *PROut = TFile::Open("./PRMC_eff.root","read");
-
-  TLatex *lat = new TLatex(); lat->SetNDC(kTRUE); lat->SetTextSize(0.04);
-  TLegend *leg = new TLegend(0.13,0.45,0.5,0.82);
-  SetLegendStyle(leg);
-  if (nbinsy < 6) {
-    leg->SetY1(0.55);
-  } else if (nbinsy < 4) {
-    leg->SetY1(0.65);
-  }
-
-  TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
-  canvNP->Draw();
-  canvNP->SetLogy(1);
-
-  double _ymin=yarray[0]; double _ymax=yarray[nbinsy-1];
-  double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt-1];
-  
-  TH1D *hNPEff[nbinspt-1], *hNPEffA;
-  TH1D *hPREff[nbinspt-1], *hPREffA;
-  TH1D *hPRt = new TH1D("hPRt","",1,0,1);
-  TH1D *hNPt = new TH1D("hNPt","",1,0,1);
-  SetHistStyle(hPRt,0,1,0.0,1.4);
-  SetHistStyle(hNPt,0,0,0.0,1.4);
-  hPRt->SetMarkerColor(kBlack);
-  hNPt->SetMarkerColor(kBlack);
-  
-  TH1D *ghost = new TH1D("ghost","",1,0,1);
-  ghost->SetMarkerColor(kWhite);
-  ghost->SetMarkerStyle(kOpenCircle);
-  ghost->SetLineColor(kWhite);
-
-  leg->AddEntry(hPRt,Form("Prompt"),"pe");
-  leg->AddEntry(hNPt,Form("Non-prompt"),"pe");
-
-  // Rapidity+Pt integrated resolution plot
-  string className = "NPJpsi";
-  hNPEffA = (TH1D*)NPOut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-  className = "PRJpsi";
-  hPREffA = (TH1D*)PROut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-
-  hNPEffA->GetXaxis()->SetRangeUser(-250,250);
-  hPREffA->GetXaxis()->SetRangeUser(-250,250);
-  hNPEffA->SetFillColor(kGray);
-  hPREffA->SetFillColor(kGray);
-  hNPEffA->SetLineColor(kBlack);
-  hPREffA->SetLineColor(kBlack);
-  hNPEffA->SetMarkerStyle(kOpenCircle);
-  hPREffA->SetMarkerStyle(kOpenSquare);
-
-  hNPEffA->DrawNormalized("hist lf2 pe");
-  hPREffA->DrawNormalized("hist lf2 pe same");
-  std::pair< string, string > testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
-  if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-  else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-  lat->DrawLatex(0.15,0.85,testStr.second.c_str());
-  lat->DrawLatex(0.15,0.80,testStr.first.c_str());
-//  leg->AddEntry(hNPEffA,Form("%s",testStr.second.c_str()),"f");
-  
-//  leg->Draw();
-  canvNP->SaveAs(Form("./ResolLxyAll_Rap%.1f-%.1f_Pt%.1f-%.1f.pdf",_ymin,_ymax,_ptmin,_ptmax));
-  canvNP->SaveAs(Form("./ResolLxyAll_Rap%.1f-%.1f_Pt%.1f-%.1f.png",_ymin,_ymax,_ptmin,_ptmax));
-  
-  delete canvNP;
-  NPOut->Close();
-  PROut->Close();
-}
-
-
-void LxyEff_resolRap(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
-  
-  TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
-  TFile *PROut = TFile::Open("./PRMC_eff.root","read");
-
-  TLatex *lat = new TLatex(); lat->SetNDC(kTRUE); lat->SetTextSize(0.04);
-  TLegend *leg = new TLegend(0.13,0.45,0.5,0.82);
-  SetLegendStyle(leg);
-  if (nbinsy < 6) {
-    leg->SetY1(0.55);
-  } else if (nbinsy < 4) {
-    leg->SetY1(0.65);
-  }
-
-  TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
-  canvNP->Draw();
-  canvNP->SetLogy(1);
-
-  double _ymin=yarray[0]; double _ymax=yarray[nbinsy-1];
-  double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt-1];
-  
-  TH1D *hNPEff[nbinspt-1], *hNPEffA;
-  TH1D *hPREff[nbinspt-1], *hPREffA;
-  TH1D *hPRt = new TH1D("hPRt","",1,0,1);
-  TH1D *hNPt = new TH1D("hNPt","",1,0,1);
-  SetHistStyle(hPRt,0,1,0.0,1.4);
-  SetHistStyle(hNPt,0,0,0.0,1.4);
-  hPRt->SetMarkerColor(kBlack);
-  hNPt->SetMarkerColor(kBlack);
-  
-  TH1D *ghost = new TH1D("ghost","",1,0,1);
-  ghost->SetMarkerColor(kWhite);
-  ghost->SetMarkerStyle(kOpenCircle);
-  ghost->SetLineColor(kWhite);
-
-  leg->AddEntry(hPRt,Form("Prompt"),"pe");
-  leg->AddEntry(hNPt,Form("Non-prompt"),"pe");
-
-  // Rapidity+Pt integrated resolution plot
-  string className = "NPJpsi";
-  hNPEffA = (TH1D*)NPOut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-  className = "PRJpsi";
-  hPREffA = (TH1D*)PROut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-
-  hNPEffA->GetXaxis()->SetRangeUser(-250,250);
-  hPREffA->GetXaxis()->SetRangeUser(-250,250);
-  hNPEffA->SetFillColor(kGray);
-  hPREffA->SetFillColor(kGray);
-  hNPEffA->SetLineColor(kGray);
-  hPREffA->SetLineColor(kGray);
-
-  hNPEffA->DrawNormalized("hist");
-  hPREffA->DrawNormalized("hist same");
-  std::pair< string, string > testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
-  leg->AddEntry(hNPEffA,Form("%s",testStr.second.c_str()),"f");
-  
-
-  // rapidity differential resolutions' plot
-  for (int i=0; i<nbinsy-1; i++) {
-    double ymin=yarray[i]; double ymax=yarray[i+1];
-    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
-
-    string className = "NPJpsi";
-    hNPEff[i] = (TH1D*)NPOut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),ymin,ymax,ptmin,ptmax));
-    className = "PRJpsi";
-    hPREff[i] = (TH1D*)PROut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),ymin,ymax,ptmin,ptmax));
-    if (logy) {
-      SetHistStyle(hNPEff[i],i,0,5E-6,1.5);
-      SetHistStyle(hPREff[i],i,1,5E-6,1.5);
-    } else {
-      SetHistStyle(hNPEff[i],i,0,0,0.3);
-      SetHistStyle(hPREff[i],i,1,0,0.3);
-    }
-
-    hNPEff[i]->DrawNormalized("same");
-    hPREff[i]->DrawNormalized("same");
-
-    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
-    if (i==0) {
-      if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-      else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-      lat->DrawLatex(0.15,0.85,testStr.first.c_str());
-    }
-    leg->AddEntry(hNPEff[i],Form("%s",testStr.second.c_str()),"pe");
-    
-  } // end of rap loop plotting
- 
-  leg->Draw();
-  canvNP->SaveAs(Form("./ResolLxyRap_Rap%.1f-%.1f_Pt%.1f-%.1f.pdf",_ymin,_ymax,_ptmin,_ptmax));
-  canvNP->SaveAs(Form("./ResolLxyRap_Rap%.1f-%.1f_Pt%.1f-%.1f.png",_ymin,_ymax,_ptmin,_ptmax));
-  
-  delete canvNP;
-  NPOut->Close();
-  PROut->Close();
-}
-
-
-void LxyEff_resolPt(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
-  
-  TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
-  TFile *PROut = TFile::Open("./PRMC_eff.root","read");
-
-  TLatex *lat = new TLatex(); lat->SetNDC(kTRUE); lat->SetTextSize(0.04);
-  TLegend *leg = new TLegend(0.13,0.45,0.5,0.82);
-  SetLegendStyle(leg);
-  if (nbinspt < 4) {
-    leg->SetY1(0.55);
-  }
-   
-  TCanvas *canvNP = new TCanvas("canvNP","c",600,600);
-  canvNP->Draw();
-  canvNP->SetLogy(1);
-
-  double _ymin=yarray[0]; double _ymax=yarray[nbinsy-1];
-  double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt-1];
-  
-  TH1D *hNPEff[nbinspt-1], *hNPEffA;
-  TH1D *hPREff[nbinspt-1], *hPREffA;
-  TH1D *hPRt = new TH1D("hPRt","",1,0,1);
-  TH1D *hNPt = new TH1D("hNPt","",1,0,1);
-  SetHistStyle(hPRt,0,1,0.0,1.4);
-  SetHistStyle(hNPt,0,0,0.0,1.4);
-  hPRt->SetMarkerColor(kBlack);
-  hNPt->SetMarkerColor(kBlack);
-  
-  TH1D *ghost = new TH1D("ghost","",1,0,1);
-  ghost->SetMarkerColor(kWhite);
-  ghost->SetMarkerStyle(kOpenCircle);
-  ghost->SetLineColor(kWhite);
-
-  leg->AddEntry(hPRt,Form("Prompt"),"pe");
-  leg->AddEntry(hNPt,Form("Non-prompt"),"pe");
- 
-  // Rapidity+Pt integrated resolution plot
-  string className = "NPJpsi";
-  hNPEffA = (TH1D*)NPOut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-  className = "PRJpsi";
-  hPREffA = (TH1D*)PROut->Get(Form("hresollxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),_ymin,_ymax,_ptmin,_ptmax));
-
-  hNPEffA->GetXaxis()->SetRangeUser(-250,250);
-  hPREffA->GetXaxis()->SetRangeUser(-250,250);
-  hNPEffA->SetFillColor(kGray);
-  hPREffA->SetFillColor(kGray);
-  hNPEffA->SetLineColor(kGray);
-  hPREffA->SetLineColor(kGray);
-
-  hNPEffA->DrawNormalized("hist");
-  hPREffA->DrawNormalized("hist same");
-  std::pair< string, string > testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
-  leg->AddEntry(hNPEffA,Form("%s",testStr.first.c_str()),"f");
-  
-
-  // pT differential resolutions' plot
-  for (int i=0; i<nbinspt-1; i++) {
-    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
-    double ptmin=ptarray[i]; double ptmax=ptarray[i+1];
-
-    string className = "NPJpsi";
-    hNPEff[i] = (TH1D*)NPOut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),ymin,ymax,ptmin,ptmax));
-    className = "PRJpsi";
-    hPREff[i] = (TH1D*)PROut->Get(Form("hresolLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f",className.c_str(),ymin,ymax,ptmin,ptmax));
-    if (logy) {
-      SetHistStyle(hNPEff[i],i,0,5E-6,1.5);
-      SetHistStyle(hPREff[i],i,1,5E-6,1.5);
-    } else {
-      SetHistStyle(hNPEff[i],i,0,0,0.3);
-      SetHistStyle(hPREff[i],i,1,0,0.3);
-    }
-
-    hNPEff[i]->DrawNormalized("same");
-    hPREff[i]->DrawNormalized("same");
-
-    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
-    if (i==0) {
-      if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-      else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-      lat->DrawLatex(0.15,0.85,testStr.second.c_str());
-    }
-    leg->AddEntry(hNPEff[i],Form("%s",testStr.first.c_str()),"pe");
-    
-  } // end of pT loop plotting
-  
-  leg->Draw();
-  canvNP->SaveAs(Form("./ResolLxyPt_Rap%.1f-%.1f_Pt%.1f-%.1f.pdf",_ymin,_ymax,_ptmin,_ptmax));
-  canvNP->SaveAs(Form("./ResolLxyPt_Rap%.1f-%.1f_Pt%.1f-%.1f.png",_ymin,_ymax,_ptmin,_ptmax));
-  
-  delete canvNP;
-  NPOut->Close();
-  PROut->Close();
-
-}
-
 void LxyEff_diff3D(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
+  gROOT->Macro("/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr/JpsiStyle.C");
   
   TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
   TFile *PROut = TFile::Open("./PRMC_eff.root","read");
@@ -419,7 +99,7 @@ void LxyEff_diff3D(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
 
 void LxyEff_diffPt(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
+  gROOT->Macro("/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr/JpsiStyle.C");
   
   TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
   TFile *PROut = TFile::Open("./PRMC_eff.root","read");
@@ -521,7 +201,7 @@ void LxyEff_diffPt(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 }
 
 void LxyEff_diffRap(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
+  gROOT->Macro("/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr/JpsiStyle.C");
   
   TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
   TFile *PROut = TFile::Open("./PRMC_eff.root","read");
@@ -628,7 +308,7 @@ void LxyEff_diffRap(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
 
 void LxyEff_diffCent(bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
+  gROOT->Macro("/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr/JpsiStyle.C");
   
   TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
   TFile *PROut = TFile::Open("./PRMC_eff.root","read");
@@ -736,7 +416,7 @@ void LxyEff_diffCent(bool absRapidity=true, bool logy=false, bool isPbPb=false) 
 
 
 void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
-  gROOT->Macro("../JpsiStyle.C");
+  gROOT->Macro("/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr/JpsiStyle.C");
   
   TFile *NPOut = TFile::Open("./NPMC_eff.root","read");
   TFile *PROut = TFile::Open("./PRMC_eff.root","read");
@@ -763,36 +443,36 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
   legA->AddEntry(hRecT,"Non-prompt J/#psi","lp");
 
 
-  // All integrated y and pT efficiency with BayesDivide()
+  // All integrated y and pT efficiency isn't done with TGraph
   double _ymin=yarray[0]; double _ymax=yarray[nbinsy-1];
   double _ptmin=ptarray[0]; double _ptmax=ptarray[nbinspt-1];
   int _centmin=centarray[0]; int _centmax=centarray[nbinscent-1];
 
-  TH1D *hNPEffA = (TH1D*)NPOut->Get(Form("hEffLxy1D_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  TH1D *hPREffA = (TH1D*)PROut->Get(Form("hEffLxy1D_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  SetHistStyle(hNPEffA,0,0,0,1.3);
-  SetHistStyle(hPREffA,3,1,0,1.3);
-  
-  TCanvas *can = new TCanvas("c","c",600,600);
-  can->SetLogy(0);
-  hNPEffA->Draw();
-  hPREffA->Draw("same");
+//  TH1D *hNPEffA = (TH1D*)NPOut->Get(Form("hEffLxy1D_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
+//  TH1D *hPREffA = (TH1D*)PROut->Get(Form("hEffLxy1D_PRJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
+//  SetHistStyle(hNPEffA,0,0,0,1.3);
+//  SetHistStyle(hPREffA,3,1,0,1.3);
+//  
+//  TCanvas *can = new TCanvas("c","c",600,600);
+//  can->SetLogy(0);
+//  hNPEffA->Draw();
+//  hPREffA->Draw("same");
+//
+//  std::pair< string, string > _testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
+//  if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+//  else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+//  lat->DrawLatex(0.15,0.85,_testStr.second.c_str());
+//  lat->DrawLatex(0.15,0.80,_testStr.first.c_str());
+//  if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",_centmin*2.5,_centmax*2.5));
+//  legA->Draw();
+//
+//  can->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
+//  can->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
+//  delete can;
 
-  std::pair< string, string > _testStr = FillLatexInfo(_ymin, _ymax, _ptmin, _ptmax, absRapidity);
-  if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-  else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-  lat->DrawLatex(0.15,0.85,_testStr.second.c_str());
-  lat->DrawLatex(0.15,0.80,_testStr.first.c_str());
-  if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",_centmin*2.5,_centmax*2.5));
-  legA->Draw();
-
-  can->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  can->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",_ymin,_ymax,_ptmin,_ptmax,_centmin,_centmax));
-  delete can;
 
 
-
-  //////// 1DEffLxy for really used histos
+  //////// 1DEffLxy for really used histos, these are done with TGraph
   TLegend *leg1d = new TLegend(0.13,0.14,0.5,0.23);
   SetLegendStyle(leg1d);
   leg1d->AddEntry(hRecT,"Reco Nonprompt MC dimuon","lp");
@@ -852,6 +532,8 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
         TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
         SetHistStyle(hNPEff,0,0,0,1.3);
         SetHistStyle(hPREff,3,1,0,1.3);
+        hNPEff->GetXaxis()->SetTitle("L_{xyz} (reco) (mm)");
+        hNPEff->GetXaxis()->SetRangeUser(0,10);
 
         hNPEff->Draw();
         hPREff->Draw("same");
@@ -872,175 +554,178 @@ void LxyEff_all (bool absRapidity=true, bool logy=false, bool isPbPb=false) {
 
 
   //// 1D integrated plots
-  for (int i=0; i<nbinsy-1; i++) {
-    double ymin=yarray[i]; double ymax=yarray[i+1];
-    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
-    int centmin=centarray[0]; int centmax=centarray[nbinscent-1];
-
-    TCanvas *canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-
-    string className = "NPJpsi";
-    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
-
-    canv->SetLogy(1);
-    hNPGen->Draw();
-    hNPRec->Draw("same");
-
-    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
-    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
-    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
-    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    leg->Draw();
-
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-    canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-    canv->SetLogy(0);
-
-    className = "NPJpsi";
-    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    className = "PRJpsi";
-    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPEff,0,0,0,1.3);
-    SetHistStyle(hPREff,3,1,0,1.3);
-
-    hNPEff->Draw();
-    hPREff->Draw("same");
-    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    legA->Draw();
-
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-  } // end of rap loop plotting
-
-  for (int j=0; j<nbinspt-1; j++) {
-    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
-    double ptmin=ptarray[j]; double ptmax=ptarray[j+1];
-    int centmin=centarray[0]; int centmax=centarray[nbinscent-1];
-
-    TCanvas *canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-    canv->SetLogy(1);
-
-    string className = "NPJpsi";
-    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
-
-    hNPGen->Draw();
-    hNPRec->Draw("same");
-
-    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
-    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
-    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
-    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    leg->Draw();
-
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-    canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-    canv->SetLogy(0);
-
-    className = "NPJpsi";
-    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    className = "PRJpsi";
-    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPEff,0,0,0,1.3);
-    SetHistStyle(hPREff,3,1,0,1.3);
-
-    hNPEff->Draw();
-    hPREff->Draw("same");
-
-    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    legA->Draw();
-
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-  } //end of pt loop plot
-
-  for (int j=0; j<nbinscent-1; j++) {
-    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
-    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
-    int centmin=centarray[j]; int centmax=centarray[j+1];
-
-    TCanvas *canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-    canv->SetLogy(1);
-
-    string className = "NPJpsi";
-    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
-    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
-
-    hNPGen->Draw();
-    hNPRec->Draw("same");
-
-    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
-    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
-    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
-    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    leg->Draw();
-
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-    canv = new TCanvas("c","c",600,600);
-    canv->Draw();
-    canv->SetLogy(0);
-
-    className = "NPJpsi";
-    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    className = "PRJpsi";
-    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
-    SetHistStyle(hNPEff,0,0,0,1.3);
-    SetHistStyle(hPREff,3,1,0,1.3);
-
-    hNPEff->Draw();
-    hPREff->Draw("same");
-
-    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
-    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
-    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
-    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
-    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
-    legA->Draw();
-
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
-    delete canv;
-
-  } //end of cent loop plot
+//  for (int i=0; i<nbinsy-1; i++) {
+//    double ymin=yarray[i]; double ymax=yarray[i+1];
+//    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
+//    int centmin=centarray[0]; int centmax=centarray[nbinscent-1];
+//
+//    TCanvas *canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//
+//    string className = "NPJpsi";
+//    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+//    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
+//
+//    canv->SetLogy(1);
+//    hNPGen->Draw();
+//    hNPRec->Draw("same");
+//
+//    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
+//    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
+//    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
+//    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    leg->Draw();
+//
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//    canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//    canv->SetLogy(0);
+//
+//    className = "NPJpsi";
+//    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    className = "PRJpsi";
+//    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPEff,0,0,0,1.3);
+//    SetHistStyle(hPREff,3,1,0,1.3);
+//    hNPEff->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//
+//    hNPEff->Draw();
+//    hPREff->Draw("same");
+//    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+//    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+//    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    legA->Draw();
+//
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//  } // end of rap loop plotting
+//
+//  for (int j=0; j<nbinspt-1; j++) {
+//    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
+//    double ptmin=ptarray[j]; double ptmax=ptarray[j+1];
+//    int centmin=centarray[0]; int centmax=centarray[nbinscent-1];
+//
+//    TCanvas *canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//    canv->SetLogy(1);
+//
+//    string className = "NPJpsi";
+//    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+//    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
+//
+//    hNPGen->Draw();
+//    hNPRec->Draw("same");
+//
+//    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
+//    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
+//    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
+//    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    leg->Draw();
+//
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//    canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//    canv->SetLogy(0);
+//
+//    className = "NPJpsi";
+//    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    className = "PRJpsi";
+//    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPEff,0,0,0,1.3);
+//    SetHistStyle(hPREff,3,1,0,1.3);
+//    hNPEff->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//
+//    hNPEff->Draw();
+//    hPREff->Draw("same");
+//
+//    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+//    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+//    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    legA->Draw();
+//
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//  } //end of pt loop plot
+//
+//  for (int j=0; j<nbinscent-1; j++) {
+//    double ymin=yarray[0]; double ymax=yarray[nbinsy-1];
+//    double ptmin=ptarray[0]; double ptmax=ptarray[nbinspt-1];
+//    int centmin=centarray[j]; int centmax=centarray[j+1];
+//
+//    TCanvas *canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//    canv->SetLogy(1);
+//
+//    string className = "NPJpsi";
+//    TH1D *hNPGen = (TH1D*)NPOut->Get(Form("hGenLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    TH1D *hNPRec = (TH1D*)NPOut->Get(Form("hRecLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPGen,1,0,1E-3,hNPGen->GetMaximum()*15);
+//    SetHistStyle(hNPRec,0,0,1E-3,hNPGen->GetMaximum()*15);
+//
+//    hNPGen->Draw();
+//    hNPRec->Draw("same");
+//
+//    std::pair< string, string > testStr = FillLatexInfo(ymin, ymax, ptmin, ptmax, absRapidity);
+//    if (isPbPb) lat->DrawLatex(0.15,0.40,"PbPb 2.76 TeV RegIt J/#psi NPMC");
+//    else lat->DrawLatex(0.15,0.40,"pp 2.76 TeV GlbGlb J/#psi NPMC");
+//    lat->DrawLatex(0.15,0.35,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.30,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.25,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    leg->Draw();
+//
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DHistLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//    canv = new TCanvas("c","c",600,600);
+//    canv->Draw();
+//    canv->SetLogy(0);
+//
+//    className = "NPJpsi";
+//    TH1D *hNPEff = (TH1D*)NPOut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    className = "PRJpsi";
+//    TH1D *hPREff = (TH1D*)PROut->Get(Form("hEffLxy_%s_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",className.c_str(),ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    SetHistStyle(hNPEff,0,0,0,1.3);
+//    SetHistStyle(hPREff,3,1,0,1.3);
+//    hNPEff->GetXaxis()->SetTitle("L_{xyz} (true) (mm)");
+//
+//    hNPEff->Draw();
+//    hPREff->Draw("same");
+//
+//    if (isPbPb) lat->DrawLatex(0.15,0.90,"PbPb 2.76 TeV RegIt J/#psi MC");
+//    else lat->DrawLatex(0.15,0.90,"pp 2.76 TeV GlbGlb J/#psi MC");
+//    lat->DrawLatex(0.15,0.85,testStr.second.c_str());
+//    lat->DrawLatex(0.15,0.80,testStr.first.c_str());
+//    if (isPbPb) lat->DrawLatex(0.15,0.75,Form("Cent. %.0f-%.0f%%",centmin*2.5,centmax*2.5));
+//    legA->Draw();
+//
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.pdf",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    canv->SaveAs(Form("./1DEffLxy_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d.png",ymin,ymax,ptmin,ptmax,centmin,centmax));
+//    delete canv;
+//
+//  } //end of cent loop plot
 
   NPOut->Close();
   PROut->Close();
@@ -1064,12 +749,10 @@ int main(int argc, char *argv[]) {
   bool isPbPb = atoi(argv[3]);
   cout << absRapidity << " " << logy << " " << isPbPb << endl;
 
-  check3DHisto();
-
   LxyEff_all(absRapidity, logy, isPbPb);
-  LxyEff_diff3D(absRapidity, logy, isPbPb);
+//  LxyEff_diff3D(absRapidity, logy, isPbPb);
 //  LxyEff_diffRap(absRapidity, logy, isPbPb);
-  LxyEff_diffPt(absRapidity, logy, isPbPb);
+//  LxyEff_diffPt(absRapidity, logy, isPbPb);
 //  LxyEff_diffCent(absRapidity, logy, isPbPb);
 
   return 0;

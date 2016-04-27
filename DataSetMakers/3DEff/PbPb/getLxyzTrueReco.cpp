@@ -5,6 +5,7 @@
 #include <TStyle.h>
 #include <TChain.h>
 #include <TH2D.h>
+#include <TF1.h>
 #include <TProfile.h>
 #include <TPaveStats.h>
 #include <TLatex.h>
@@ -26,8 +27,8 @@ void fillHistDrawPlot(TFile *output, string outdir, bool npmc, bool ctau, TChain
   string histname = Form("Rap%.1f-%.1f_Pt%.1f-%.1f",ymin,ymax,ptmin,ptmax);
   
   TProfile *profiley;
-  TH2D ctauTrueReco(Form("ctauTrueReco_%s",histname.c_str()),";#font[12]{l}_{J/#psi} (True) [mm];#font[12]{l}_{J/#psi} (Reco) [mm]", 60,-1.5,1.5,60,-1.5,1.5);
-  TH2D lxyzTrueReco(Form("lxyzTrueReco_%s",histname.c_str()),";L_{xyz} (True) [mm];L_{xyz} (Reco) [mm]", 200,-5,5,200,-5,5);
+  TH2D ctauTrueReco(Form("ctauTrueReco_%s",histname.c_str()),";#font[12]{l}_{J/#psi} (True) [mm];#font[12]{l}_{J/#psi} (Reco) [mm]", 60,-3,3,60,-3,3);
+  TH2D lxyzTrueReco(Form("lxyzTrueReco_%s",histname.c_str()),";L_{xyz} (True) [mm];L_{xyz} (Reco) [mm]", 200,-10,10,200,-10,10);
 
   if (ctau) {
     ch->Draw(Form("Reco_QQ_ctau3D:Reco_QQ_ctauTrue3D*10>>ctauTrueReco_%s",histname.c_str()),cutsdiff.c_str(),"");
@@ -36,6 +37,9 @@ void fillHistDrawPlot(TFile *output, string outdir, bool npmc, bool ctau, TChain
     ch->Draw(Form("Reco_QQ_ctau3D*Reco_QQ_4mom.P()/3.096916:Reco_QQ_ctauTrue3D*10*Reco_QQ_4mom.P()/3.096916>>lxyzTrueReco_%s",histname.c_str()),cutsdiff.c_str(),"");
     profiley = (TProfile*)lxyzTrueReco.ProfileY();
   }
+  TF1 *f1 = new TF1(Form("%s_TF",profiley->GetName()),"pol1",0,10);
+  f1->SetLineColor(kRed);
+  profiley->Fit(f1,"RS");
   // End of histogram fill
 
   TLatex *lat = new TLatex(); lat->SetNDC();
@@ -126,18 +130,21 @@ void fillHistDrawPlot(TFile *output, string outdir, bool npmc, bool ctau, TChain
 ////////// * * * MAIN * * * ////////////
 void getLxyzTrueReco(bool absRapidity=false, bool npmc=true, bool ctau=false) {
 
-  const double yarray[] = {0, 1.2, 1.6, 2.4};
+  const double yarray[] = {0, 0.8, 1.2, 1.6, 2.0, 2.4};
   const double ptarray[] = {6.5, 7.5, 8.5, 9.5, 11.0, 13.0, 16.0, 30.0};
-  const double ptforwarray[] = {3, 4.5, 5.5, 6.5};
+  const double ptarray2[] = {6.5, 8.5, 11.0, 16.0, 30.0};
+//  const double ptforwarray[] = {3, 4.5, 5.5, 6.5};
+  const double ptforwarray[] = {3, 5.5, 6.5};
   const int nbinsy = sizeof(yarray)/sizeof(double) -1;
   const int nbinspt = sizeof(ptarray)/sizeof(double) -1;
+  const int nbinspt2 = sizeof(ptarray2)/sizeof(double) -1;
   const int nbinsptforw = sizeof(ptforwarray)/sizeof(double) -1;
 
   
   gROOT->Macro("../JpsiStyle.C");
   gStyle->SetOptStat(1);
   
-  string outdir="./LxyzTrueReco";
+  string outdir="./";
   gSystem->mkdir(outdir.c_str());
   string outputname;
   if (ctau) outputname = outdir + "/ctauTrueReco.root";
@@ -175,18 +182,38 @@ void getLxyzTrueReco(bool absRapidity=false, bool npmc=true, bool ctau=false) {
       double ptmin = ptarray[b];
       double ptmax = ptarray[b+1];
 
+      cout << ymin << " " << ymax << " " << ptmin << " " << ptmax << endl;
       fillHistDrawPlot(output, outdir, npmc, ctau, ch, ymin, ymax, ptmin, ptmax);
 
     } // End of for (int b=0; b<nbinspt; b++)
   } // End of for (int a=0; a<nbinsy; a++)
 
+  for (int b=0; b<nbinspt2; b++) {
+    double ymin = 1.6;
+    double ymax = 2.0;
+    double ptmin = ptarray2[b];
+    double ptmax = ptarray2[b+1];
+
+    fillHistDrawPlot(output, outdir, npmc, ctau, ch, ymin, ymax, ptmin, ptmax);
+    
+    ymin = 2.0;
+    ymax = 2.4;
+    fillHistDrawPlot(output, outdir, npmc, ctau, ch, ymin, ymax, ptmin, ptmax);
+
+  } // End of for (int b=0; b<nbinspt; b++)
+
 
   for (int b=0; b<nbinsptforw; b++) {
     double ymin = 1.6;
-    double ymax = 2.4;
+    double ymax = 2.0;
     double ptmin = ptforwarray[b];
     double ptmax = ptforwarray[b+1];
+    cout << ymin << " " << ymax << " " << ptmin << " " << ptmax << endl;
 
+    fillHistDrawPlot(output, outdir, npmc, ctau, ch, ymin, ymax, ptmin, ptmax);
+    
+    ymin = 2.0;
+    ymax = 2.4;
     fillHistDrawPlot(output, outdir, npmc, ctau, ch, ymin, ymax, ptmin, ptmax);
   }
 

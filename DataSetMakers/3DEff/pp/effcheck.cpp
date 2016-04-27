@@ -22,12 +22,12 @@ void check(string range) {
   
   cout << endl;
 
-  TH1D *hrap = (TH1D*)_file1->Get(Form("h1DEffRap_NPJpsi_%s",range.c_str()));
-  prt(hrap);
-  TH1D *hpt = (TH1D*)_file1->Get(Form("h1DEffPt_NPJpsi_%s;1",range.c_str()));
-  prt(hpt);
-  TH1D *hcent = (TH1D*)_file1->Get(Form("h1DEffCent_NPJpsi_%s",range.c_str()));
-  prt(hcent);
+  TH1D *hrap1 = (TH1D*)_file1->Get(Form("h1DEffRap_NPJpsi_%s",range.c_str()));
+  prt(hrap1);
+  TH1D *hpt1 = (TH1D*)_file1->Get(Form("h1DEffPt_NPJpsi_%s;1",range.c_str()));
+  prt(hpt1);
+  TH1D *hcent1 = (TH1D*)_file1->Get(Form("h1DEffCent_NPJpsi_%s",range.c_str()));
+  prt(hcent1);
 
 }
 

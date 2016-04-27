@@ -23,10 +23,8 @@ using namespace std;
 bool drawFitCurve = false;
 
 bool isForwardLowpT(double ymin, double ymax, double ptmin, double ptmax) {
-//  if (ptmax<=6.5) return true;
   if (ptmax<=6.5 && fabs(ymin)>=1.6 && fabs(ymax)<=2.4) return true;
   else return false;
-return false;
 }
 
 double fitPol1(double *x, double *par) {
@@ -246,33 +244,6 @@ void SuperImposeRatio(TH1D *heffProf[], TH1D *heffSimUnf[], TH1D *heffRatio[], c
   delete lat;
   delete line;
 
-}
-
-void getCorrectedEffErr(const int nbins, TH1D *hrec, TH1D *hgen, TH1D *heff) {
-  for (int a=0; a<nbins; a++) {
-    double genInt = hgen->GetBinContent(a+1);
-    double genErr = hgen->GetBinError(a+1);
-    double recInt = hrec->GetBinContent(a+1);
-    double recErr = hrec->GetBinError(a+1);
-    double eff = recInt / genInt;
-
-    double tmpErrGen1 = TMath::Power(eff,2) / TMath::Power(genInt,2);
-    double tmpErrRec1 = TMath::Power(recErr,2);
-    double tmpErr1 = tmpErrGen1 * tmpErrRec1;
-
-    double tmpErrGen2 = TMath::Power(1-eff,2) / TMath::Power(genInt,2);
-    double tmpErrRec2 = TMath::Abs(TMath::Power(genErr,2) - TMath::Power(recErr,2));
-    double tmpErr2 = tmpErrGen2 * tmpErrRec2;
-    double effErr = TMath::Sqrt(tmpErr1 + tmpErr2);
-
-    if (genInt == 0) {
-      heff->SetBinContent(a+1, 0);
-      heff->SetBinError(a+1, 0);
-    } else {
-      heff->SetBinContent(a+1, eff);
-      heff->SetBinError(a+1, effErr);
-    }
-  }
 }
 
 void LxyEff_3D(TFile *output, TFile *file3DEff[], TFile *file3DCT[], TH1D *hNPEff[], const string title, const int nbinsy, const double *yarray, const int nbinspt, const double *ptarray, const int nbinscent, const int *centarray, const int nbinsctau, const double *ctauarray, bool isPbPb, bool absRapidity) {
@@ -1061,14 +1032,14 @@ int main(int argc, char *argv[]) {
   const int _centforwarr_pp[]   = {0, 40};
   const double _ptarr_pbpb[]       = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _ptarr_pp[]         = {6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-  const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
-  const double _ptforwarr_pp[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+//  const double _ptforwarr_pbpb[]   = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
+  const double _ptforwarr_pbpb[]   = {3.0, 5.5, 6.5, 8.5, 11, 16, 30};
+  const double _ptforwarr_pp[]     = {3.0, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 11, 13, 16, 30};
   const double _raparr_abs[]       = {0.0, 1.2, 1.6};
   const double _rapforwarr_abs[]   = {1.6, 2.4};
   const double _raparr_noabs[]     = {-1.6, -1.2, -0.8, 0.0, 0.8, 1.2, 1.6};
   const double _rapforwarr_noabs[] = {-2.4, -1.6, 1.6, 2.4};
   const double _ctauarray[]        = {0, 0.3, 0.5, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0};
-//  const double _ctauarray[]        = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.3, 1.6, 1.9, 2.5, 3.0};
   const double _ctauforwarray[]    = {0, 0.4, 0.8, 1.2, 1.6, 3.0, 4.0, 5.0, 7.0, 10.0};
   const double recoctauarray[]     = {-2, 0, 0.5, 1, 3, 5};
   const unsigned int nbinsrecoctau = sizeof(recoctauarray)/sizeof(double) -1;
@@ -1135,14 +1106,14 @@ int main(int argc, char *argv[]) {
   TFile *cgenFNPR_LowPt, *cgenFNPR_ForwHighPt, *cgenFNPRMinus_LowPt, *cgenFNPRMinus_ForwHighPt;
 
   if (isPbPb) {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/root528/RegionsDividedInEta_noTnPCorr";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/PbPb/root604/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pbpb.root","recreate");
     else
       output = new TFile("./FinalEfficiency_pbpb_notAbs.root","recreate");
-    sprintf(lxyTRHistname,"%s/LxyzTrueReco_0_8_12_16_24/lxyzTrueReco.root",dirPath.c_str());
+    sprintf(lxyTRHistname,"%s/LxyzTrueReco_0_8_12_16_20_24/lxyzTrueReco.root",dirPath.c_str());
   } else {
-    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root528/RegionsDividedInEta_noTnPCorr";
+    dirPath = "/home/mihee/cms/RegIt_JpsiRaa/Efficiency/pp/root604/RegionsDividedInEta_noTnPCorr";
     if (absRapidity)
       output = new TFile("./FinalEfficiency_pp.root","recreate");
     else
@@ -1154,85 +1125,19 @@ int main(int argc, char *argv[]) {
     cout << effHistname << endl;
     effFileNominal = new TFile(effHistname,"read");
     
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
+    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
     cout << effHistname << endl;
     effFileNominal_LowPt = new TFile(effHistname,"read");
     
     sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
     cout << effHistname << endl;
     effFileNominal_ForwHighPt = new TFile(effHistname,"read");
-    
-    // 3D efficiency files
-    sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN1: " << effHistname << endl;
-    effFN1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN2: " << effHistname << endl;
-    effFN2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN_LowPt: " << effHistname << endl;
-    effFN_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN_ForwHighPt: " << effHistname << endl;
-    effFN_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR1: " << effHistname << endl;
-    effFNPR1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR2: " << effHistname << endl;
-    effFNPR2 = new TFile(effHistname,"read");
-
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR_LowPt: " << effHistname << endl;
-    effFNPR_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR_ForwHighPt: " << effHistname << endl;
-    effFNPR_ForwHighPt = new TFile(effHistname,"read");
-    
-    // 3D efficiency files (eff*gen)
-    sprintf(effHistname,"%s_closureTest/Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN1: " << effHistname << endl;
-    cgenFN1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN2: " << effHistname << endl;
-    cgenFN2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN_LowPt: " << effHistname << endl;
-    cgenFN_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN_ForwHighPt: " << effHistname << endl;
-    cgenFN_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR1: " << effHistname << endl;
-    cgenFNPR1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR2: " << effHistname << endl;
-    cgenFNPR2 = new TFile(effHistname,"read");
-
-    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR_LowPt: " << effHistname << endl;
-    cgenFNPR_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR_ForwHighPt: " << effHistname << endl;
-    cgenFNPR_ForwHighPt = new TFile(effHistname,"read");
   } else {
     sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
     cout << "effFileNominal: " << effHistname << endl;
     effFileNominal = new TFile(effHistname,"read");
  
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
+    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
     cout << "effFileNominal_LowPt: " << effHistname << endl;
     effFileNominal_LowPt = new TFile(effHistname,"read");
     
@@ -1244,143 +1149,13 @@ int main(int argc, char *argv[]) {
     cout << "effFileNominalMinus: " << effHistname << endl;
     effFileNominalMinus = new TFile(effHistname,"read");
     
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC_eff.root",dirPath.c_str());
+    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-30.0/NPMC_eff.root",dirPath.c_str());
     cout << "effFileNominalMinus_LowPt:" << effHistname << endl;
     effFileNominalMinus_LowPt = new TFile(effHistname,"read");
     
     sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC_eff.root",dirPath.c_str());
     cout << "effFileNominalMinus_ForwHighPt: "<< effHistname << endl;
     effFileNominalMinus_ForwHighPt = new TFile(effHistname,"read");
- 
-    // 3D efficiency files
-    sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN1: "<< effHistname << endl;
-    effFN1 = new TFile(effHistname,"read");
-   
-    sprintf(effHistname,"%s/notAbs_Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN2: " << effHistname << endl;
-    effFN2 = new TFile(effHistname,"read");
-   
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN_LowPt: " << effHistname << endl;
-    effFN_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFN_ForwHighPt: "<< effHistname << endl;
-    effFN_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNMinus1: "<< effHistname << endl;
-    effFNMinus1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-1.6--1.2_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNMinus2: "<< effHistname << endl;
-    effFNMinus2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNMinus_LowPt: " << effHistname << endl;
-    effFNMinus_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNMinus_ForwHighPt : " << effHistname << endl;
-    effFNMinus_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR1: " << effHistname << endl;
-    effFNPR1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR2: " << effHistname << endl;
-    effFNPR2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR_LowPt: " << effHistname << endl;
-    effFNPR_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPR_ForwHighPt: " << effHistname << endl;
-    effFNPR_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-1.6-0.0_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPRMinus1 : " << effHistname << endl;
-    effFNPRMinus1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-1.6--1.2_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPRMinus2: " << effHistname << endl;
-    effFNPRMinus2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPRMinus_LowPt: " << effHistname << endl;
-    effFNPRMinus_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s/notAbs_Rap-2.4--1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "effFNPRMinus_ForwHighPt : " << effHistname << endl;
-    effFNPRMinus_ForwHighPt = new TFile(effHistname,"read");
-
-    // 3D efficiency files (eff*gen)
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap0.0-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN1: "<< effHistname << endl;
-    cgenFN1 = new TFile(effHistname,"read");
-   
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.2-1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN2: " << effHistname << endl;
-    cgenFN2 = new TFile(effHistname,"read");
-   
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN_LowPt: " << effHistname << endl;
-    cgenFN_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFN_ForwHighPt: " << effHistname << endl;
-    cgenFN_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6-0.0_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNMinus1: "<< effHistname << endl;
-    cgenFNMinus1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6--1.2_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNMinus2: "<< effHistname << endl;
-    cgenFNMinus2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt3.0-6.5/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNMinus_LowPt: " << effHistname << endl;
-    cgenFNMinus_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt6.5-30.0/NPMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNMinus_ForwHighPt: " << effHistname << endl;
-    cgenFNMinus_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap0.0-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR1: "<< effHistname << endl;
-    cgenFNPR1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.2-1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR2: "<< effHistname << endl;
-    cgenFNPR2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR_LowPt: "<< effHistname << endl;
-    cgenFNPR_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap1.6-2.4_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPR_ForwHighPt: "<< effHistname << endl;
-    cgenFNPR_ForwHighPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6-0.0_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPRMinus1: "<< effHistname << endl;
-    cgenFNPRMinus1 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-1.6--1.2_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPRMinus2: "<< effHistname << endl;
-    cgenFNPRMinus2 = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt3.0-6.5/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPRMinus_LowPt: "<< effHistname << endl;
-    cgenFNPRMinus_LowPt = new TFile(effHistname,"read");
-    
-    sprintf(effHistname,"%s_closureTest/notAbs_Rap-2.4--1.6_Pt6.5-30.0/PRMC3DAnaBins_eff.root",dirPath.c_str());
-    cout << "cgenFNPRMinus_ForwHighPt: "<< effHistname << endl;
-    cgenFNPRMinus_ForwHighPt = new TFile(effHistname,"read");
   }
   
   cout << lxyTRHistname << endl;
@@ -1562,12 +1337,10 @@ int main(int argc, char *argv[]) {
         for (unsigned int d=0; d<nbinsctau; d++) {
           fitname = Form("hMeanLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d_Lxy%.1f-%.1f",
                     rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1],ctauarr[d],ctauarr[d+1]);
-          if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+          if (!absRapidity && (rapforwarr[a]<0 && rapforwarr[a+1]<=0)) {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
-          } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
-            hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
-          } else if (!absRapidity && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
-            hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_ForwHighPt->Get(fitname.c_str());
+          } else if (!absRapidity && (rapforwarr[a]>=0 || rapforwarr[a+1]>0)) {
+            hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
           } else {
             hMeanLxy_LowPt[nidx][d] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
           }
@@ -1576,12 +1349,10 @@ int main(int argc, char *argv[]) {
 
         fitname = Form("hEffLxy_NPJpsi_Rap%.1f-%.1f_Pt%.1f-%.1f_Cent%d-%d",
                   rapforwarr[a],rapforwarr[a+1],ptforwarr[b],ptforwarr[b+1],centforwarr[c],centforwarr[c+1]);
-        if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
+        if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0)) {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_LowPt->Get(fitname.c_str());
-        } else if (!absRapidity && (rapforwarr[a]<0 || rapforwarr[a+1]<=0) && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
-          heffCentNom_LowPt[nidx] = (TH1D*)effFileNominalMinus_ForwHighPt->Get(fitname.c_str());
-        } else if (!absRapidity && !isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) {
-          heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_ForwHighPt->Get(fitname.c_str());
+        } else if (!absRapidity && (rapforwarr[a]>=0 || rapforwarr[a+1]>0)) {
+          heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
         } else {
           heffCentNom_LowPt[nidx] = (TH1D*)effFileNominal_LowPt->Get(fitname.c_str());
         }
@@ -1790,7 +1561,7 @@ int main(int argc, char *argv[]) {
         if (0 != res->Status()) {
           while (1) {
             counter++;
-            res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"R S EX0");
+            res = geffSimUnf[nidx]->Fit(Form("%s_TF",heffSimUnf[nidx]->GetName()),"R S EX0 M");
             if (0==res->Status() || counter > 10) break;
           }    
         }    
@@ -1814,7 +1585,7 @@ int main(int argc, char *argv[]) {
         double centmin = centforwarr[c]; double centmax = centforwarr[c+1];
         
         cout << rapforwarr[a] << " " << rapforwarr[a+1] << " " << ptforwarr[b] << " " << ptforwarr[b+1] << " " << centforwarr[c] << " " << centforwarr[c+1]  << endl;
-        cout << heffCentNom_LowPt[nidx] << endl;
+        cout << heffCentNom_LowPt[nidx] << " " << heffCentNom_LowPt[nidx]->GetName() << endl;
 
         if (isForwardLowpT(rapforwarr[a], rapforwarr[a+1], ptforwarr[b], ptforwarr[b+1])) { // Less ctau bins for forward & low pT case
           nbinsctau = nbinsforwctau;
@@ -1910,6 +1681,7 @@ int main(int argc, char *argv[]) {
         for (unsigned int d=0; d<nbinsctau; d++) {
           double gx, gy;
           geffSimUnf_LowPt[nidx]->GetPoint(d,gx,gy);
+          cout << " meanlxy: " << nidx << " " << d << " " << hMeanLxy_LowPt[nidx][d] << endl;
 
           double meanlxy, meanlxyxlerr, meanlxyxherr;
           meanlxy = hMeanLxy_LowPt[nidx][d]->GetMean();
@@ -2003,10 +1775,10 @@ int main(int argc, char *argv[]) {
         double beEmpty=0, afEmpty=0, beEmptyErr=0, afEmptyErr=0;
         for (unsigned int d=0; d<nbinsctau; d++) {
           // Retrieve true Lxy (Can be used for RD cases)
-//          double binwidth = lxyTrueReco_pfy[nidx]->GetYaxis()->GetBinWidth(ctauarr[d]);
-//          int bin1 = lxyTrueReco_pfy[nidx]->FindBin(ctauarr[d]+binwidth/2);
-//          double truelxy = lxyTrueReco_pfy[nidx]->GetBinContent(bin1);
-          double truelxy = ctauarr[d];
+          double binwidth = ctauarr[d+1]-ctauarr[d];
+          TF1 *f1 = (TF1*)lxyTrueReco_pfy[nidx]->GetFunction(Form("%s_TF",lxyTrueReco_pfy[nidx]->GetName()));
+          double truelxy = f1->Eval(ctauarr[d]+binwidth/2.0);
+//          double truelxy = ctauarr[d]; // Use Lxyz(True) directly
           int bin2 = heffCentNom[nidx]->FindBin(truelxy);
           eff[d] = heffCentNom[nidx]->GetBinContent(bin2);
           effErr[d] = heffCentNom[nidx]->GetBinError(bin2);
@@ -2048,7 +1820,10 @@ int main(int argc, char *argv[]) {
         }
 
         for (unsigned int d=0; d<nbinsctau; d++) {
-          double truelxy = ctauarr[d];
+          double binwidth = ctauarr[d+1]-ctauarr[d];
+          TF1 *f1 = (TF1*)lxyTrueReco_pfy[nidx]->GetFunction(Form("%s_TF",lxyTrueReco_pfy[nidx]->GetName()));
+          double truelxy = f1->Eval(ctauarr[d]+binwidth/2.0);
+//          double truelxy = ctauarr[d]; // Use Lxyz(True) directly
           heffProf[nidx]->SetBinContent(d+1,eff[d]);
           heffProf[nidx]->SetBinError(d+1,effErr[d]);
           cout << "   " << d << "\t| " << truelxy << "\t| " << eff[d] << " +/- " << effErr[d] << endl;
@@ -2127,10 +1902,10 @@ int main(int argc, char *argv[]) {
         double beEmpty=0, afEmpty=0, beEmptyErr=0, afEmptyErr=0;
         for (unsigned int d=0; d<nbinsctau; d++) {
           // Retrieve true Lxy (Can be used for RD cases)
-//          double binwidth = lxyTrueReco_pfy_LowPt[nidx]->GetYaxis()->GetBinWidth(ctauarr[d]);
-//          int bin1 = lxyTrueReco_pfy_LowPt[nidx]->FindBin(ctauarr[d]+binwidth/2);
-//          double truelxy = lxyTrueReco_pfy_LowPt[nidx]->GetBinContent(bin1);
-          double truelxy = ctauarr[d];
+          double binwidth = ctauarr[d+1]-ctauarr[d];
+          TF1 *f1 = (TF1*)lxyTrueReco_pfy_LowPt[nidx]->GetFunction(Form("%s_TF",lxyTrueReco_pfy_LowPt[nidx]->GetName()));
+          double truelxy = f1->Eval(ctauarr[d]+binwidth/2.0);
+//          double truelxy = ctauarr[d]; // Use Lxyz(True) directly
           int bin2 = heffCentNom_LowPt[nidx]->FindBin(truelxy);
           eff[d] = heffCentNom_LowPt[nidx]->GetBinContent(bin2);
           effErr[d] = heffCentNom_LowPt[nidx]->GetBinError(bin2);
@@ -2171,7 +1946,10 @@ int main(int argc, char *argv[]) {
         }
 
         for (unsigned int d=0; d<nbinsctau; d++) {
-          double truelxy = ctauarr[d];
+          double binwidth = ctauarr[d+1]-ctauarr[d];
+          TF1 *f1 = (TF1*)lxyTrueReco_pfy_LowPt[nidx]->GetFunction(Form("%s_TF",lxyTrueReco_pfy_LowPt[nidx]->GetName()));
+          double truelxy = f1->Eval(ctauarr[d]+binwidth/2.0);
+//          double truelxy = ctauarr[d]; // Use Lxyz(True) directly
           heffProf_LowPt[nidx]->SetBinContent(d+1,eff[d]);
           heffProf_LowPt[nidx]->SetBinError(d+1,effErr[d]);
           cout << "   " << d << "\t| " << truelxy << "\t| " << eff[d] << " +/- " << effErr[d] << endl;
