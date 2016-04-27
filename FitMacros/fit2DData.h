@@ -34,9 +34,16 @@
 #include "RooPlot.h"
 #include "RooConstVar.h"
 #include "RooKeysPdf.h"
+#include "RooNLLVar.h"
+#include "RooMinuit.h"
+//#include "RooStats/ModelConfig.h"
+//#include "RooStats/ProfileLikelihoodCalculator.h"
+//#include "RooStats/LikelihoodInterval.h"
+//#include "RooStats/LikelihoodIntervalPlot.h"
 
 using namespace std;
 using namespace RooFit;
+//using namespace RooStats;
 
 struct InputOpt {
   string FileName, FileNameMC1, FileNameMC2;
@@ -58,6 +65,7 @@ struct InputOpt {
  
   bool analyticBlifetime;
   bool doBfit;
+  bool useWeightedNP;
   bool narrowSideband;
   bool oneGaussianResol;
   bool fixResol2MC;
@@ -105,8 +113,9 @@ RooDataHist* subtractSidebands(RooWorkspace* ws, RooDataHist* subtrData, RooData
 void ctauErrCutCheck(RooWorkspace *ws, RooDataSet *redData, RooDataSet *redData_2, RooDataSet *redMC, RooDataSet *redMC_2, RooDataSet *redMC2, RooDataSet *redMC2_2, InputOpt &opt) ;
 void sidebandLeftRightCheck(RooWorkspace *ws, RooDataSet *redDataSBL, RooDataSet *redDataSBR, InputOpt &opt);
 void drawMassPlotsWithoutB(RooWorkspace *ws, RooDataSet* redDataCut, RooFitResult *fitM, InputOpt &opt);
+void drawMassFitParsNLL(RooWorkspace *ws, RooDataSet* redDataCut, InputOpt &opt);
 void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist *binDataCtErrSIG, RooDataHist *subtrData, RooDataHist *weightedBkg, InputOpt &opt);
-void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooPlot *tframePR, InputOpt &opt);
+void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooDataSet *redMCCutPR, RooPlot *tframePR, InputOpt &opt);
 void drawCtauSBPlots(RooWorkspace *ws, RooDataSet *redDataSB, RooDataSet *redDataSBL, RooDataSet *redDataSBR, RooDataHist *binDataCtErr, RooFitResult *fitSB, RooFitResult *fitSBL, RooFitResult *fitSBR, InputOpt &opt) ;
 void drawMassPlotsWithB(RooWorkspace *ws, RooDataSet* redDataCut, double NSigNP_fin, double NBkg_fin, RooFitResult *fitM, InputOpt &opt);
 void drawCtauFitPlots(RooWorkspace *ws, RooDataSet *redDataCut, RooDataHist* binDataCtErr, double NSigNP_fin, double NBkg_fin, RooFitResult *fit2D, InputOpt &opt) ;
@@ -115,13 +124,13 @@ void drawCtauFitPlotsSignals(RooWorkspace *ws, RooDataSet *redDataCut, RooDataSe
 
 
 
-
 /////////////////////////////////////////////////////////
 //////////////////// Sub-routines ///////////////////////
 /////////////////////////////////////////////////////////
 void defineMassBkg(RooWorkspace *ws) {
   // 1st order polynomial
-  ws->factory("Polynomial::polFunct(Jpsi_Mass,{coefPol1[-0.05,-5.,5.]})");
+//  ws->factory("Polynomial::polFunct(Jpsi_Mass,{coefPol1[-0.05,-5.,5.]})");
+  ws->factory("Chebychev::polFunct(Jpsi_Mass,{coefPol1[-0.05,-5.,5.]})");
   // Exponential
   ws->factory("Exponential::expFunct(Jpsi_Mass,coefExp[-1.,-3.,1.])");
 
@@ -132,14 +141,14 @@ void defineMassSig(RooWorkspace *ws, InputOpt &opt) {
   //////// Candidates for signal
   // Normal gaussians
   if (opt.is2Widths == 1) {
-    ws->factory("Gaussian::signalG1(Jpsi_Mass,meanSig1[3.0975,3.05,3.15],sigmaSig1[0.1,0.02,0.2])");
+    ws->factory("Gaussian::signalG1(Jpsi_Mass,meanSig1[3.0975,3.05,3.15],sigmaSig1[0.1,0.0001,0.6])");
   } else if (opt.is2Widths == 0) {
     ws->factory("Gaussian::signalG1(Jpsi_Mass,meanSig1[3.0975,3.05,3.15],sigmaSig1[0.02,0.008,0.2])");
   }
 
   // Crystall Ball
   ws->factory("CBShape::signalCB(Jpsi_Mass,meanSig1,sigmaSig1,alpha[1.,0.,3.],enne[5.,1.,30.])");
-  ws->factory("CBShape::signalCB2(Jpsi_Mass,meanSig1,sigmaSig2[0.03,0.01,0.06],alpha,enne)");
+  ws->factory("CBShape::signalCB2(Jpsi_Mass,meanSig1,sigmaSig2[0.03,0.0001,0.6],alpha,enne)");
   ws->factory("CBShape::signalCBWN(Jpsi_Mass,meanSig1,sigmaSig1,alpha,enneW[5.,1.,50.])");
   ws->factory("CBShape::signalCB2WN(Jpsi_Mass,meanSig1,sigmaSig2,alpha,enneW)");
   ws->factory("CBShape::signalCB3WN(Jpsi_Mass,meanSig1,sigmaSig3[0.03,0.01,0.2],alpha,enneW)");
@@ -148,7 +157,6 @@ void defineMassSig(RooWorkspace *ws, InputOpt &opt) {
   // Sum of gaussian 1 and a crystall ball
   if (opt.is2Widths == 1) {
     ws->factory("SUM::sigCBG1(coeffGaus[0.1,0.0,1.0]*signalG1,signalCB)");
-//    ws->factory("SUM::sigCBG1(coeffGaus[0.1,0.0,0.93]*signalG1,signalCB)");
   } else if (opt.is2Widths == 0) {
     ws->factory("SUM::sigCBG1(coeffGaus[0.1,0.05,1.]*signalG1,signalCB)");
   }
@@ -514,15 +522,15 @@ void defineCTSig(RooWorkspace *ws, RooDataSet *redMCCut, RooDataSet *redMCCutNP,
 //        RooAddPdf sigNP("sigNP","Non-prompt signal",RooArgSet(*(ws->pdf("sigNPW")),*(ws->pdf("sigNPN"))),RooArgSet(*(ws->var("fracRes"))));  ws->import(sigNP); 
         
         // With RooKeysPdf
-//        RooKeysPdf sigNPHist("sigNPHist","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorBoth);  ws->import(sigNPHist);
+//        RooKeysPdf sigNPHist("sigNPHist","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCutNP,RooKeysPdf::MirrorBoth);  ws->import(sigNPHist);
 //        RooFFTConvPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*(ws->pdf("sigNPHist")),*(ws->pdf("sigPR")));  ws->import(sigNP);
 
-//        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorBoth);  ws->import(sigNP);
-        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCut,RooKeysPdf::MirrorLeftAsymRight);  ws->import(sigNP);
+//        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCutNP,RooKeysPdf::MirrorBoth);  ws->import(sigNP);
+        RooKeysPdf sigNP("sigNP","Non-prompt signal",*(ws->var("Jpsi_Ct")),*redMCCutNP,RooKeysPdf::MirrorLeftAsymRight);  ws->import(sigNP);
 
         RooPlot *trueframef = ws->var("Jpsi_Ct")->frame(Bins(150));
-        redMCCut->plotOn(trueframef);
-        ws->pdf("sigNP")->plotOn(trueframef,LineColor(kBlue),Normalization(redMCCut->sumEntries(),RooAbsReal::NumEvent));
+        redMCCutNP->plotOn(trueframef);
+        ws->pdf("sigNP")->plotOn(trueframef,LineColor(kBlue),Normalization(redMCCutNP->sumEntries(),RooAbsReal::NumEvent));
 
         char titlestr_lin[512];
 

@@ -11,16 +11,12 @@ prefix=$3
 ################################################################ 
 ########## Script parameter setting
 ################################################################ 
-# Storage for batch jobs (should be under /afs)
 storage=/store/user/miheejo/FitResults/PbPb/$prefix
-#$(pwd)/Results/$prefix
 scripts=$(pwd)/Scripts
-#if [ ! -d "$(pwd)/Results" ]; then
-#  mkdir $(pwd)/Results
-#fi
-#if [ ! -d "$storage" ]; then
-  cmsMkdir $storage
-#fi
+cmsMkdir $storage
+if [ ! -d "$(pwd)/Results" ]; then
+  mkdir $(pwd)/Results
+fi
 if [ ! -d "$scripts" ]; then
   mkdir $scripts
 fi
@@ -43,9 +39,9 @@ mc2=/afs/cern.ch/work/m/miheejo/private/2014JpsiAna/PbPb/datasets_mc/root604/pro
 mSigF="sigCB2WNG1" # Mass signal function name (options: sigCB2WNG1 (default), signalCB3WN)
 mBkgF="expFunct" # Mass background function name (options: expFunct (default), polFunct)
 
-weight=0  #0: Do NOT weight, 1: Do weight + extended ML fit, 2: Do weight + normalized ML fit
+weight=1  #0: Do NOT weight, 1: Do weight + extended ML fit, 2: Do weight + normalized ML fit
 eventplane="etHF" # Name of eventplane (etHFp, etHFm, etHF(default))
-runOpt=4 # Inclusive mass fit (options: 4(default), 3(Constrained fit), 5(_mb in 2010 analysis))
+runOpt=3 # Inclusive mass fit (options: 4(default), 3(Constrained fit), 5(_mb in 2010 analysis))
 ctauErrOpt=0 # 2: Not apply ctau error range, 1: get ctau error range on the fly, 0: read ctau error range from a file (fit_ctauErrorRange)
 ctauErrFile=/afs/cern.ch/user/m/miheejo/public/HIN-14-005/FitScripts/PbPb_noWeighted_fit_ctauErrorRange_Lxyz # Location of ctau error range file
 anaBct=1 #0: do b-fit(not-analytic fit for b-lifetime), 1: do b-fit(analytic fit for b-lifetime), 2: do NOT b-fit
@@ -172,4 +168,5 @@ done
 for pt in ${ptcoarser3[@]}; do
   program 0.0-2.4 $pt 0.0-100.0
 done
+
 

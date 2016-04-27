@@ -55,7 +55,11 @@ int main (int argc, char* argv[]) {
   cout << inOpt.FileNameMC1.c_str() << endl;
   if (fInMC.IsZombie()) { cout << "CANNOT open MC1 root file\n"; return 1; }
   fInMC.cd();
-  RooDataSet *dataMC = (RooDataSet*)fInMC.Get("dataJpsi");
+  RooDataSet *dataMC;
+  if (inOpt.useWeightedNP)
+    dataMC = (RooDataSet*)fInMC.Get("dataJpsiWeight");
+  else
+    dataMC = (RooDataSet*)fInMC.Get("dataJpsi");
   dataMC->SetName("dataMC");
 
   TFile fInMC2(inOpt.FileNameMC2.c_str());  //Prompt J/psi MC
@@ -179,14 +183,6 @@ int main (int argc, char* argv[]) {
 
   setWSRange(ws, lmin, lmax, errmin, errmax);
 
-  // Draw data
-  ws->var("Jpsi_Mass")->SetTitle("m_{#mu#mu}");
-  ws->var("Jpsi_Ct")->SetTitle("#font[12]{l}_{J/#psi}");
-
-  // Test true lifetimes
-  RooPlot *trueFrame = ws->var("Jpsi_CtTrue")->frame();
-  ws->data("dataMC")->plotOn(trueFrame,DataError(RooAbsData::SumW2),Cut("MCType==MCType::NP"));
-
   string titlestr;
   TCanvas c0;
 
@@ -214,62 +210,31 @@ int main (int argc, char* argv[]) {
   RooBinning rb2 = setCtBinning(inOpt);
   RooBinning rbCorser(-lmin,lmax);
   rbCorser.addUniform(60,-lmin,lmax);
-//  ws->var("Jpsi_Ct")->setBins(90);  //original
   ws->var("Jpsi_Ct")->setBinning(rb2);  //original
-//  ws->var("Jpsi_Ct")->setBinning(rbCorser);  //corser
   
-  // Define ctau binning for plotting (coarser bin)
-  RooBinning rb3(-lmin,lmax);
-  rb3.addBoundary(-1.0);
-  rb3.addBoundary(-0.7);
-  rb3.addBoundary(-0.6);
-  rb3.addBoundary(-0.5);
-  rb3.addUniform(5,-0.5,-0.2);
-  rb3.addUniform(15,-0.2,0.2);
-  rb3.addUniform(5,0.2,0.5);
-//  rb3.addUniform(5,0.5,1.0);
-  rb3.addUniform(10,0.5,1.2); //new added
-  rb3.addUniform(6,1.2,lmax); //new added
-
   // Additional cuts on data and get sub-datasets/histograms
-  RooDataSet *redDataCut;
-  string reduceDSstr;
-  if (inOpt.isGG == 0) {
-    reduceDSstr = "(MCType != MCType::NP || Jpsi_CtTrue>0.0001) &&\
-                  (MCType == MCType::PR || MCType == MCType::NP)";
-    redDataCut = (RooDataSet*)redData->Clone();
-  } else if (inOpt.isGG == 1) {
-    reduceDSstr = "(MCType != MCType::NP || Jpsi_CtTrue > 0.0001) &&\
-                  (MCType == MCType::PR || MCType == MCType::NP)";
-    redDataCut = (RooDataSet*)redData->Clone();
-  } else {
-    reduceDSstr = "(MCType != MCType::NP || Jpsi_CtTrue>0.0001) &&\
-                   (MCType == MCType::PR || MCType == MCType::NP)";
-    if (inOpt.isPbPb == 1) {
-      redDataCut = (RooDataSet*)redData->reduce("Jpsi_Ct < 600000.");
-    } else {
-      redDataCut = (RooDataSet*)redData_2->reduce("Jpsi_Ct < 600000.");
-    }
-  }
+  RooDataSet *redDataCut = (RooDataSet*)redData->Clone();
+  redDataCut->Print();
 
   // Test ctau on data and mc with/without ctau error cut
 //  ctauErrCutCheck(ws,redData,redData_2,redMC,redMC_2,redMC2,redMC2_2,inOpt);
   RooDataHist *binData = new RooDataHist("binData","binData",RooArgSet( *(ws->var("Jpsi_Mass")),*(ws->var("Jpsi_Ct")),*(ws->var("Jpsi_CtErr")) ), *redDataCut);
   RooDataHist *binDataCtErr = new RooDataHist("binDataCtErr","binDataCtErr",RooArgSet(*(ws->var("Jpsi_CtErr"))),*redDataCut);
-  cout << "DATA :: N events to fit: " << binData->sumEntries() << endl;
+  cout << "DATA :: N events to fit: " << redDataCut->numEntries() << endl;
 
   // *** Get MC sub-datasets and its histograms corresponds to data
   RooDataSet *redMCCut, *redMCCutNP, *redMCCut2, *redMCCutPR ;
+  string reduceDSstr = "Jpsi_CtTrue>0.0001";
   if (inOpt.isPEE == 1) {
-    redMCCut = (RooDataSet*) redMC->reduce(reduceDSstr.c_str());
-    redMCCut2 = (RooDataSet*) redMC2->reduce(reduceDSstr.c_str());
+    if (inOpt.useWeightedNP)
+      redMCCutNP = (RooDataSet*) redMC->Clone();
+    else
+      redMCCutNP = (RooDataSet*) redMC->reduce(reduceDSstr.c_str());
+    redMCCutPR = (RooDataSet*) redMC2->Clone();
   } else {
-    redMCCut = (RooDataSet*) redMC_2->reduce(reduceDSstr.c_str());
-    redMCCut2 = (RooDataSet*) redMC2_2->reduce(reduceDSstr.c_str());
+    redMCCutNP = (RooDataSet*) redMC_2->reduce(reduceDSstr.c_str());
+    redMCCutPR = (RooDataSet*) redMC2_2->Clone();
   }
-  redMCCutNP = (RooDataSet*) redMCCut->reduce(RooArgSet(*(ws->var("Jpsi_CtTrue"))));
-//  redMCCutNP = (RooDataSet*) redMCCut->reduce(RooArgSet(*(ws->var("Jpsi_CtTrue"))),"MCType == MCType::NP");
-  redMCCutPR = (RooDataSet*) redMCCut2->reduce("MCType == MCType::PR");
 
   // SYSTEMATICS 1 (very sidebands)
   RooDataSet *redDataSB;
@@ -417,23 +382,35 @@ int main (int argc, char* argv[]) {
         if (TMath::Abs(inOpt.ymin)==1.6 && TMath::Abs(inOpt.ymax)==2.4 && inOpt.pmin==3.0 && inOpt.pmax==30) {
           ws->var("alpha")->setVal(1.89);
           ws->var("enneW")->setVal(1.44);
+          ws->var("alpha")->setError(0.19);
+          ws->var("enneW")->setError(0.32);
         } else if (TMath::Abs(inOpt.ymin)>=0 && TMath::Abs(inOpt.ymax)<=2.4 && inOpt.pmin>=6.5 && inOpt.pmax<=30) {
           ws->var("alpha")->setVal(1.492);
           ws->var("enneW")->setVal(1.733);
+          ws->var("alpha")->setError(0.04);
+          ws->var("enneW")->setError(0.07);
         } else if (TMath::Abs(inOpt.ymin)>=1.6 && TMath::Abs(inOpt.ymax)<=2.4 && inOpt.pmin>=3.0 && inOpt.pmax<=6.5) {
           ws->var("alpha")->setVal(1.860);
           ws->var("enneW")->setVal(1.380);
+          ws->var("alpha")->setError(0.19);
+          ws->var("enneW")->setError(0.32);
         }
       } else {
         if (TMath::Abs(inOpt.ymin)==1.6 && TMath::Abs(inOpt.ymax)==2.4 && inOpt.pmin==3.0 && inOpt.pmax==30) {
           ws->var("alpha")->setVal(2.059);
           ws->var("enneW")->setVal(1.41);
+          ws->var("alpha")->setError(0.08);
+          ws->var("enneW")->setError(0.10);
         } else if (TMath::Abs(inOpt.ymin)>=0 && TMath::Abs(inOpt.ymax)<=2.4 && inOpt.pmin>=6.5 && inOpt.pmax<=30) {
           ws->var("alpha")->setVal(1.696);
           ws->var("enneW")->setVal(1.718);
+          ws->var("alpha")->setError(0.05);
+          ws->var("enneW")->setError(0.07);
         } else if (TMath::Abs(inOpt.ymin)>=1.6 && TMath::Abs(inOpt.ymax)<=2.4 && inOpt.pmin>=3.0 && inOpt.pmax<=6.5) {
           ws->var("alpha")->setVal(2.040);
           ws->var("enneW")->setVal(1.310);
+          ws->var("alpha")->setError(0.08);
+          ws->var("enneW")->setError(0.10);
         }
       }
       ws->var("alpha")->setConstant(kTRUE);
@@ -442,220 +419,124 @@ int main (int argc, char* argv[]) {
       // Special bin variable settings
       // !centest == for 0-100% bin
       // !dPhitest == for 0-1.571 bin
-      if (inOpt.isPbPb == 1) {
-        if (!inOpt.yrange.compare("0.0-2.4")) {
-          if (inOpt.pmin >= 10.0) {
-            ws->var("sigmaSig1")->setRange(0.005,0.05);
-            ws->var("sigmaSig2")->setRange(0.005,0.10);
-            if (!centest && !dPhitest) { // for 0-100%, 0-1.571
-              ws->var("sigmaSig1")->setVal(0.01);
-            }
-            if (!dPhitest) { // for 0-1.571
-              ws->var("sigmaSig2")->setVal(0.07);
-            }
-          }
-          else if (inOpt.pmax <= 7.5) {
-            if (inOpt.doWeight==1) {
-              ws->var("sigmaSig1")->setRange(0.030,0.12);
-              ws->var("sigmaSig2")->setRange(0.010,0.07);
-              if (!centest && !dPhitest) {
-                ws->var("sigmaSig1")->setVal(0.04);
-              }
-              if (!dPhitest) {
-                ws->var("sigmaSig2")->setVal(0.05);
-              }
-            } else if (inOpt.doWeight==0) {
-              ws->var("sigmaSig1")->setRange(0.025,0.11);
-              ws->var("sigmaSig2")->setRange(0.010,0.09);
-              if (!centest && !dPhitest) {
-                ws->var("sigmaSig1")->setVal(0.06);
-              }
-              if (!dPhitest) {
-                ws->var("sigmaSig2")->setVal(0.01);
-              }
-            }
-          }
-          else if (inOpt.pmax <= 8.5) {
-            ws->var("sigmaSig1")->setRange(0.01,0.07);
-            ws->var("sigmaSig2")->setRange(0.020,0.10);
-            if (!centest && !dPhitest) {
+      if (inOpt.doWeight == 1) {
+        if (inOpt.isPbPb == 1) {
+          if (inOpt.ymin==0.0 && inOpt.ymax==2.4) {
+            if (inOpt.pmin==11 && inOpt.pmax==13) {
+              ws->var("sigmaSig1")->setRange(0.04,0.09);
+              ws->var("sigmaSig2")->setRange(0.01,0.09);
+              ws->var("sigmaSig1")->setVal(0.05);
+              ws->var("sigmaSig2")->setVal(0.02);
+            } else if (inOpt.pmin==13 && inOpt.pmax==16) {
+              ws->var("sigmaSig1")->setRange(0.01,0.10);
+              ws->var("sigmaSig2")->setRange(0.01,0.10);
               ws->var("sigmaSig1")->setVal(0.02);
-            }
-            if (!dPhitest) {
               ws->var("sigmaSig2")->setVal(0.02);
             }
-          } 
-        } // rap0.0-2.4
-        else if (inOpt.ymax <= 1.2) {
-          ws->var("sigmaSig1")->setRange(0.005,0.08);
-          ws->var("sigmaSig2")->setRange(0.005,0.05);
-          if (!centest && !dPhitest) {
-            ws->var("sigmaSig1")->setVal(0.005);
-          }
-        } // rap <= 1.2
-        else if (inOpt.ymin >= 1.6) {
-          if (inOpt.pmax <= 6.5 || (inOpt.pmin==3 && inOpt.pmax==30)) {
-            if (inOpt.doWeight == 1) {
-              initBkg = 200000;
-              if (!centest && !dPhitest) {
-                ws->var("sigmaSig1")->setVal(0.04);
+          } // 0.0 <= rap <= 2.4
+          else if (inOpt.ymin==0.0 && inOpt.ymax==1.2) {
+            if (inOpt.cmin==10 && inOpt.cmax==20) {
+              if (!inOpt.mSigFunct.compare("signalCB3WN")) {
+                ws->var("sigmaSig3")->setRange(0.022,0.026);
+                ws->var("sigmaSig3")->setVal(0.02);
               }
-              if (centest && !dPhitest) {
-                ws->var("sigmaSig2")->setVal(0.09);
-              }
-
-              if (inOpt.pmin==3 && inOpt.pmax==30) {
-                ws->var("sigmaSig1")->setRange(0.01,0.09);
-                ws->var("sigmaSig2")->setRange(0.052,0.11);
-                ws->var("sigmaSig1")->setVal(0.04);
-                ws->var("sigmaSig2")->setVal(0.06);
-                if (centest && !dPhitest) {
-                  ws->var("sigmaSig2")->setVal(0.013);
-                }
-              } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-                ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.02,0.10);
-                ws->var("sigmaSig2")->setRange(0.02,0.10);
-                ws->var("sigmaSig1")->setVal(0.035);
-                ws->var("sigmaSig2")->setVal(0.045);
-              } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
-                ws->var("coefExp")->setRange(-1,3);
-//                ws->var("sigmaSig1")->setRange(0.01,0.10);
-//                ws->var("sigmaSig2")->setRange(0.01,0.10);
-//                ws->var("sigmaSig1")->setVal(0.03);
-//                ws->var("sigmaSig2")->setVal(0.055);
-                ws->var("sigmaSig1")->setRange(0.01,0.10);
-                ws->var("sigmaSig2")->setRange(0.01,0.10);
-                ws->var("sigmaSig1")->setVal(0.03);
-                ws->var("sigmaSig2")->setVal(0.01);
-              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-                ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.01,0.10);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.035);
-                ws->var("sigmaSig2")->setVal(0.025);
-              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.01,0.09);
-                ws->var("sigmaSig2")->setRange(0.01,0.13);
-                ws->var("sigmaSig1")->setVal(0.04);
-                ws->var("sigmaSig2")->setVal(0.03);
-                if (centest && !dPhitest) {
-                  ws->var("sigmaSig2")->setVal(0.013);
-                }
-              } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
-                ws->var("coefExp")->setRange(-1,3);
-                ws->var("sigmaSig1")->setRange(0.01,0.087);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.05);
-                ws->var("sigmaSig2")->setVal(0.03);
-              }
-            } else if (inOpt.doWeight == 0) {
-              initBkg = 25000;
-              if (!centest && !dPhitest) {
-                ws->var("sigmaSig1")->setVal(0.04);
-              } else if (centest && !dPhitest) {
-                ws->var("sigmaSig2")->setVal(0.09);
-              }
-
-              if (inOpt.pmin==3 && inOpt.pmax==30) {
-                ws->var("sigmaSig1")->setRange(0.01,0.077);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.03);
-                ws->var("sigmaSig2")->setVal(0.06);
-              } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
-                ws->var("sigmaSig1")->setRange(0.01,0.15);
-                ws->var("sigmaSig2")->setRange(0.01,0.06);
-                ws->var("sigmaSig1")->setVal(0.04);
-                ws->var("sigmaSig2")->setVal(0.04);
-                if (!centest && !dPhitest) {
-                  ws->var("sigmaSig2")->setVal(0.04);
-                }
-              } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-                ws->var("sigmaSig1")->setRange(0.01,0.09);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.06);
-                ws->var("sigmaSig2")->setVal(0.07);
-              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-                ws->var("sigmaSig1")->setRange(0.01,0.09);
-                ws->var("sigmaSig2")->setRange(0.01,0.13);
-                if (!centest && !dPhitest) {
-                  ws->var("sigmaSig1")->setVal(0.09);
-                  ws->var("sigmaSig2")->setVal(0.07);
-                } else if (centest && !dPhitest) {
-                  ws->var("sigmaSig2")->setVal(0.013);
-                }
-              } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
-                ws->var("sigmaSig1")->setRange(0.01,0.12);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.05);
-                ws->var("sigmaSig2")->setVal(0.04);
-              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-                ws->var("sigmaSig1")->setRange(0.01,0.15);
-                ws->var("sigmaSig2")->setRange(0.01,0.09);
-                ws->var("sigmaSig1")->setVal(0.04);
-                ws->var("sigmaSig2")->setVal(0.03);
-              }
+            } else if (inOpt.cmin==20 && inOpt.cmax==30) {
+              ws->var("sigmaSig2")->setRange(0.02,0.05);
+              ws->var("sigmaSig2")->setVal(0.04);
             }
-            // end of pT < 6.5 || pT 3-30
-          } else if (inOpt.pmin >= 6.5) {
-            ws->var("sigmaSig1")->setRange(0.045,0.11);
-            ws->var("sigmaSig2")->setRange(0.01,0.05);
-            if (!centest && !dPhitest) {
-              ws->var("sigmaSig1")->setVal(0.055);
-            }
-            if (!dPhitest) {
-              ws->var("sigmaSig2")->setVal(0.010);
-            }
-          }
-
-          if (inOpt.ymin==2.0 && inOpt.ymax==2.4) {
-            ws->var("sigmaSig1")->setRange(0.01,0.11);
-            ws->var("sigmaSig2")->setRange(0.01,0.11);
-            ws->var("sigmaSig1")->setVal(0.04);
-            ws->var("sigmaSig2")->setVal(0.04);
-          }
-        } // rap > 1.6
-      } // PbPb
-      else {
-        if (!inOpt.yrange.compare("0.0-2.4")) {
-          if (inOpt.pmin >= 10.0) {
-            cout << "set parameters pmin >= 10" << endl;
-            ws->var("sigmaSig1")->setRange(0.005,0.13);
-            ws->var("sigmaSig2")->setRange(0.005,0.13);
-            if (inOpt.pmin >=16) {
-              ws->var("sigmaSig1")->setRange(0.005,0.06);
-              ws->var("sigmaSig2")->setRange(0.035,0.13);
-              ws->var("sigmaSig1")->setVal(0.02);
+          } // 0.0 <= rap <= 1.2
+          else if (inOpt.ymin==0.4 && inOpt.ymax==0.8) {
+            if (!inOpt.mSigFunct.compare("signalCB3WN")) {
+              ws->var("sigmaSig3")->setRange(0.001,0.06);
+              ws->var("sigmaSig3")->setVal(0.02);
+            } else {
+              ws->var("sigmaSig1")->setRange(0.005,0.15);
+              ws->var("sigmaSig2")->setRange(0.015,0.15);
+              ws->var("sigmaSig1")->setVal(0.07);
               ws->var("sigmaSig2")->setVal(0.07);
             }
-          }
-        } // rap0.0-2.4
-        else if ((inOpt.ymin == 0.0 && inOpt.ymax==1.2) || inOpt.ymax <= 0.8) {
-          ws->var("sigmaSig1")->setVal(0.01);
-          ws->var("sigmaSig2")->setVal(0.05);
-          ws->var("sigmaSig1")->setRange(0.005,0.06);
-          ws->var("sigmaSig2")->setRange(0.005,0.10);
-        } else if (inOpt.ymin == 1.6 && inOpt.ymax == 2.4 && inOpt.pmin==3 && inOpt.pmax==4.5) {
-          ws->var("sigmaSig1")->setVal(0.03);
-          ws->var("sigmaSig2")->setVal(0.03);
-          ws->var("sigmaSig1")->setRange(0.01,0.09);
-          ws->var("sigmaSig2")->setRange(0.01,0.09);
-        } else if (inOpt.ymin >= 0.8 && inOpt.ymax <= 2.0) {
-          ws->var("sigmaSig1")->setVal(0.01);
-          ws->var("sigmaSig2")->setVal(0.05);
-          ws->var("sigmaSig1")->setRange(0.01,0.06);
-          ws->var("sigmaSig2")->setRange(0.02,0.10);
-        } else if (!inOpt.yrange.compare("2.0-2.4")) {
-          if (!inOpt.prange.compare("6.5-30.0")) {
-            ws->var("sigmaSig1")->setVal(0.02);
+          } // 0.4 <= rap <= 0.8
+          else if (inOpt.ymin==0.8 && inOpt.ymax==1.2) {
+            ws->var("sigmaSig1")->setVal(0.03);
             ws->var("sigmaSig2")->setVal(0.03);
-            ws->var("sigmaSig1")->setRange(0.01,0.10);
-            ws->var("sigmaSig2")->setRange(0.01,0.12);
+          } // 0.8 <= rap <= 1.2
+          else if (inOpt.ymin >= 1.6) {
+            if (inOpt.pmax <= 6.5 || (inOpt.pmin==3 && inOpt.pmax==30)) {
+              initBkg = 200000;
+              if (inOpt.pmin==3 && inOpt.pmax==30) {
+                ws->var("sigmaSig1")->setRange(0.01,0.15);
+                ws->var("sigmaSig2")->setRange(0.01,0.11);
+                ws->var("sigmaSig1")->setVal(0.05);
+                ws->var("sigmaSig2")->setVal(0.05);
+              } else if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+                ws->var("sigmaSig1")->setRange(0.01,0.2);
+                ws->var("sigmaSig2")->setRange(0.01,0.2);
+                ws->var("sigmaSig1")->setVal(0.05);
+                ws->var("sigmaSig2")->setVal(0.045);
+              } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
+                ws->var("sigmaSig1")->setRange(0.02,0.15);
+                ws->var("sigmaSig2")->setRange(0.01,0.15);
+                ws->var("sigmaSig1")->setVal(0.02);
+                ws->var("sigmaSig2")->setVal(0.04);
+              } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
+                if (!inOpt.mBkgFunct.compare("polFunct")) {
+                  ws->var("sigmaSig1")->setRange(0.015,0.12);
+                  ws->var("sigmaSig2")->setRange(0.01,0.12);
+                  ws->var("sigmaSig1")->setVal(0.030);
+                  ws->var("sigmaSig2")->setVal(0.060);
+                } else {
+                  // nominal
+//                  ws->var("sigmaSig1")->setRange(0.02,0.21);
+//                  ws->var("sigmaSig2")->setRange(0.01,0.21);
+//                  ws->var("sigmaSig1")->setVal(0.039);
+//                  ws->var("sigmaSig2")->setVal(0.056);
+                  //ctau1mm
+                  ws->var("sigmaSig1")->setRange(0.01,0.2);
+                  ws->var("sigmaSig2")->setRange(0.01,0.2);
+                  ws->var("sigmaSig1")->setVal(0.045);
+                  ws->var("sigmaSig2")->setVal(0.04);
+                }
+              } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
+                ws->var("sigmaSig1")->setRange(0.02,0.15);
+                ws->var("sigmaSig2")->setRange(0.01,0.15);
+                ws->var("sigmaSig1")->setVal(0.04);
+                ws->var("sigmaSig2")->setVal(0.01);
+              } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
+                // nominal setting for raa and v2
+                ws->var("sigmaSig1")->setRange(0.02,0.10);
+                ws->var("sigmaSig2")->setRange(0.01,0.10);
+                ws->var("sigmaSig1")->setVal(0.04);
+                ws->var("sigmaSig2")->setVal(0.05);
+                // v2 polFunct
+//                ws->var("sigmaSig1")->setRange(0.01,0.15);
+//                ws->var("sigmaSig2")->setRange(0.01,0.11);
+//                ws->var("sigmaSig1")->setVal(0.05);
+//                ws->var("sigmaSig2")->setVal(0.01);
+                if (inOpt.cmin==10 && inOpt.cmax==20) {
+                  ws->var("sigmaSig2")->setRange(0.001,0.08);
+                  ws->var("sigmaSig2")->setVal(0.05);
+                }
+              }
+            }
+          } // end of pT < 6.5 || pT 3-30
+        } // PbPb
+        else { // pp
+          if (!inOpt.yrange.compare("0.0-2.4")) {
+            if (inOpt.pmin >=16) {
+              ws->var("sigmaSig1")->setVal(0.12);
+              ws->var("sigmaSig2")->setVal(0.04);
+            }
+          } // rap0.0-2.4
+          else if (inOpt.ymin >= 1.6) {
+            if (inOpt.pmin==3 && inOpt.pmax==4.5) {
+              ws->var("sigmaSig1")->setRange(0.04,0.15);
+              ws->var("sigmaSig2")->setRange(0.01,0.15);
+              ws->var("sigmaSig1")->setVal(0.05);
+              ws->var("sigmaSig2")->setVal(0.045);
+            }
           }
-        } // rap2.0-2.4
-      } // pp
-      //End of speical bin setting
+        } // End of pp setting
+      } //End of speical bin setting
 
       if (centConst || dPhiConst) {
         ifstream input;
@@ -671,7 +552,6 @@ int main (int argc, char* argv[]) {
           if (!tmp.compare("coeffGaus")) { inputP.coeffGaus = inputTmp[0]; inputP.coeffGausErr = inputTmp[1];
           } else if (!tmp.compare("meanSig1")) { inputP.meanSig1 = inputTmp[0]; inputP.meanSig1Err = inputTmp[1];
           } else if (!tmp.compare("sigmaSig1")) { inputP.sigmaSig1 = inputTmp[0]; inputP.sigmaSig1Err = inputTmp[1];
-//            if (!inOpt.yrange.compare("0.0-1.2") && inOpt.prange.compare("6.5-8.0")) inputP.sigmaSig1 = inputTmp[0]; inputP.sigmaSig1Err = inputTmp[1]*1.1;
           } else if (!tmp.compare("sigmaSig2")) { inputP.sigmaSig2 = inputTmp[0]; inputP.sigmaSig2Err = inputTmp[1];
           } else if (!tmp.compare("sigmaSig3")) { inputP.sigmaSig3 = inputTmp[0]; inputP.sigmaSig3Err = inputTmp[1];
           } else if (!tmp.compare("alpha")) { inputP.alpha = inputTmp[0]; inputP.alphaErr = inputTmp[1];
@@ -726,9 +606,18 @@ int main (int argc, char* argv[]) {
         ws->var("alpha")->setVal(inputP.alpha);
         ws->var("enneW")->setVal(inputP.enneW);
 
-        ws->var("coeffGaus")->setConstant(kTRUE);
-        ws->var("meanSig1")->setConstant(kTRUE);
-        ws->var("sigmaSig1")->setConstant(kTRUE);
+        // Some bins are fitted better with all free fit parameters
+//        if ( (inOpt.ymin==0.0 && inOpt.ymax==1.2 && inOpt.cmin==20 && inOpt.cmax==30) ||
+//             (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.cmin==15 && inOpt.cmax==20)
+//           ) {
+//          ws->var("coeffGaus")->setConstant(kFALSE);
+//          ws->var("meanSig1")->setConstant(kFALSE);
+//          ws->var("sigmaSig1")->setConstant(kFALSE);
+//        } else {
+          ws->var("coeffGaus")->setConstant(kTRUE);
+          ws->var("meanSig1")->setConstant(kTRUE);
+          ws->var("sigmaSig1")->setConstant(kTRUE);
+//        }
         ws->var("alpha")->setConstant(kTRUE);
         ws->var("enneW")->setConstant(kTRUE);
 
@@ -782,12 +671,11 @@ int main (int argc, char* argv[]) {
       cout << "funct: " <<  funct << endl;
       ws->factory(funct);
       if (dPhiConst) { //sigmaSig2 will be constrained too!
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig2Con")),*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig2Con")),*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Save(1),SumW2Error(kTRUE),NumCPU(8));
       } else if (centConst && !dPhiConst) { //sigmaSig2 will be NOT constrained!
-//        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),ExternalConstraints(RooArgSet(*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Save(1),SumW2Error(kTRUE),NumCPU(8));
       } else { // all free fit bin
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
       }
     } else {
       if (inOpt.doWeight == 1) {
@@ -811,15 +699,18 @@ int main (int argc, char* argv[]) {
       }
       cout << "funct: " <<  funct << endl;
       ws->factory(funct);
+    
       if (dPhiConst) { //sigmaSig2 will be constrained too!
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig2Con")),*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig2Con")),*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Extended(1),Save(1),SumW2Error(kTRUE),NumCPU(8));
       } else if (centConst && !dPhiConst) { //sigmaSig2 will be NOT constrained!
-//        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,ExternalConstraints(RooArgSet(*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,ExternalConstraints(RooArgSet(*(ws->pdf("sigmaSig1Con")),*(ws->pdf("meanSig1Con")),*(ws->pdf("coeffGausCon")),*(ws->pdf("alphaCon")),*(ws->pdf("enneWCon")))),Extended(1),Save(1),SumW2Error(kTRUE),NumCPU(8));
       } else { // all free fit bin
-        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+        fitM = ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(1),Save(1),SumW2Error(kTRUE),NumCPU(8));
       }
     }
+
+    drawMassFitParsNLL(ws, redDataCut, inOpt);
+
     fitM->Print("v");
     theEDMMass = fitM->edm();
     theNLLMass = fitM->minNll();
@@ -851,6 +742,16 @@ int main (int argc, char* argv[]) {
       mSigmaCBErr = ws->var("sigmaSig2")->getError();
       mSigmaGausErr = ws->var("sigmaSig1")->getError();
       mCoeffGausErr = ws->var("coeffGaus")->getError();
+      // If 2 widths are very close,
+      // or signal shapes on certain bins were better described with 1 function rather than 2,
+      // coeffGaus will be poorly estimated.
+      // This increases uncertainty too much on the final width,
+      // so error on coeffGaus will be ignored for this case.
+      // Examples for not-close 2 widths:
+      // case 1) (s1)0.035^2 - (s2)0.08^2 = -0.052
+      // case 2) (s1)0.035^2 - (s2)0.06^2 = -0.024
+      // but error on coeffGaus is often in the same order!
+      if (mCoeffGausErr > 0.3*mCoeffGaus) mCoeffGausErr = 0;
 
       inOpt.combinedWidth = sqrt( (1-mCoeffGaus)*pow(mSigmaCB,2) + mCoeffGaus*pow(mSigmaGaus,2) );
       inOpt.combinedWidthErr = (0.5/inOpt.combinedWidth) *
@@ -864,7 +765,10 @@ int main (int argc, char* argv[]) {
       inOpt.combinedWidth = mSigmaCB;
       inOpt.combinedWidthErr = mSigmaCBErr;
 
-    } else if (!inOpt.mSigFunct.compare("sigCBWNG1") || !inOpt.mSigFunct.compare("signalCBWN")) {
+    } else if (
+        !inOpt.mSigFunct.compare("sigCBWNG1") || !inOpt.mSigFunct.compare("signalCBWN") ||
+        !inOpt.mSigFunct.compare("signalG1") 
+        ) {
       mSigmaCB = ws->var("sigmaSig1")->getVal();
       mSigmaCBErr = ws->var("sigmaSig1")->getError();
       inOpt.combinedWidth = mSigmaCB;
@@ -878,7 +782,6 @@ int main (int argc, char* argv[]) {
     inOpt.PcombinedWidth = inOpt.combinedWidth*1000;
     inOpt.PcombinedWidthErr = inOpt.combinedWidthErr*1000;
     if(inOpt.PcombinedWidthErr < 1) inOpt.PcombinedWidthErr = 1;
-
 
     // Draw mass plot before do ctau fit
     if (!inOpt.doBfit) drawMassPlotsWithoutB(ws, redDataCut, fitM, inOpt);
@@ -1014,8 +917,6 @@ int main (int argc, char* argv[]) {
     RooFitResult *fitPR, *fitSB, *fitSBR, *fitSBL;
     double RSS = 0;
     unsigned int nFullBinsResid = 0;
-    RooArgSet* newRow;
-    RooDataSet* tempJpsi;
     if (inOpt.prefitSignalCTau) {
       RooPlot *tframePR;
       if (inOpt.isPEE == 1) {
@@ -1023,13 +924,13 @@ int main (int argc, char* argv[]) {
                             Conditional(*(ws->pdf("sigPR")), RooArgList(*(ws->var("Jpsi_Ct"))))
                             );  ws->import(sigPR_PEE);
 
-        if (inOpt.isPbPb==1) {
+/*        if (inOpt.isPbPb==1) {
           if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
             ws->var("meanResSigN")->setRange(-0.05,0.05);
             ws->var("meanResSigW")->setRange(-0.05,0.05);
           }
         }
-
+*/
         // Fix fraction & mean values to the MinBias bin
         if (inOpt.crange.compare("0.0-100.0")) {
           struct PARAM {
@@ -1076,15 +977,9 @@ int main (int argc, char* argv[]) {
 //            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
 //            if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
 
-            //////// check ////////
-/*            if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5 && inOpt.cmin==10 && inOpt.cmax==20) {
-//              if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kFALSE);
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
-            }*/
         }  // end of fix fraction & mean values to the MinBias bin
 
 
-//        fitPR = ws->pdf("sigPR_PEE")->fitTo(*redMCCutPR,Range("promptfit"),SumW2Error(kTRUE),Save(1),NumCPU(8));
         fitPR = ws->pdf("sigPR_PEE")->fitTo(*redMCCutPR,Range("promptfit"),SumW2Error(kTRUE),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))),Save(1),NumCPU(8));
         fitPR->Print("v");
 
@@ -1092,33 +987,6 @@ int main (int argc, char* argv[]) {
         if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kTRUE);
         if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
         if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-
-        // Check prompt fit is fine with per event error fit. CtWeighted means l/err l
-        RooRealVar* CtWeighted = new RooRealVar("CtWeighted","#font[12]{l}_{J/#psi} / #sigma( #font[12]{l}_{J/#psi} )",-5.,5.);
-        ws->import(*CtWeighted);
-        const RooArgSet* thisRowpr = (RooArgSet*)redMCCutPR->get(0); 
-        newRow = new RooArgSet(*CtWeighted);
-        tempJpsi = new RooDataSet("tempJpsi","new data",*newRow);
-        for (Int_t iSamp = 0; iSamp < redMCCutPR->numEntries(); iSamp++) {
-          thisRowpr = (RooArgSet*)redMCCutPR->get(iSamp);
-          RooRealVar* myct = (RooRealVar*)thisRowpr->find("Jpsi_Ct");
-          RooRealVar* mycterr = (RooRealVar*)thisRowpr->find("Jpsi_CtErr");
-          CtWeighted->setVal(myct->getVal()/mycterr->getVal());
-          RooArgSet* tempRow = new RooArgSet(*CtWeighted);
-          tempJpsi->add(*tempRow);
-        }
-
-        if (inOpt.oneGaussianResol) {
-          ws->factory("Gaussian::tempsigPR(CtWeighted,meanResSigW,sigmaResSigN)");
-        } else {
-          ws->factory("Gaussian::tempresGW(CtWeighted,meanResSigW,sigmaResSigW)");
-          ws->factory("Gaussian::tempresGN(CtWeighted,meanResSigN,sigmaResSigN)");
-          ws->factory("SUM::tempsigPR(fracRes*tempresGW,tempresGN)");
-        }  
-
-        tframePR = ws->var("CtWeighted")->frame();
-        tempJpsi->plotOn(tframePR,DataError(RooAbsData::SumW2));
-        ws->pdf("tempsigPR")->plotOn(tframePR,NumCPU(8),LineColor(kBlue),Normalization(tempJpsi->sumEntries(),RooAbsReal::NumEvent));
 
       } else if (inOpt.isPEE == 0) {
         fitPR = ws->pdf("sigPR")->fitTo(*redMCCutPR,SumW2Error(kTRUE),Save(1),NumCPU(8));
@@ -1132,16 +1000,10 @@ int main (int argc, char* argv[]) {
         }
         ws->var("fracRes")->setConstant(kTRUE);
 
-        tframePR = ws->var("Jpsi_Ct")->frame();
-        tframePR->GetXaxis()->SetTitle("#font[12]{l}_{J/#psi} (mm)");
-        redMCCutPR->plotOn(tframePR,DataError(RooAbsData::SumW2));
-        ws->pdf("sigPR")->plotOn(tframePR,LineColor(kBlue),Normalization(redMCCutPR->sumEntries(),RooAbsReal::NumEvent));
       }
 
       // Plot resolution functions
-      if (inOpt.drawTimeConsumingPlots) {
-        ctauResolFitCheck(ws, true, tframePR, inOpt);
-      }
+      if (inOpt.drawTimeConsumingPlots) ctauResolFitCheck(ws, true, redMCCutPR, tframePR, inOpt);
     
     } else {
       cout << "Please check running option and turn on prefitSignalCTau\n";
@@ -1154,28 +1016,17 @@ int main (int argc, char* argv[]) {
         if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kTRUE);
         if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
         if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-        if (inOpt.isPbPb==0) { //pp
-          if ( (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) ||
-               (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==8) ) {
-            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-          } else {
+        if (!inOpt.fixResol2MC) {
+          if (inOpt.isPbPb==0) { //pp
+            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
+            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
+          } else if (inOpt.isPbPb==1) { //PbPb
             if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
             if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
           }
-        } else if (inOpt.isPbPb==1) { //PbPb
-//          if ( (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30 && inOpt.cmin==60 && inOpt.cmax==100) 
-//             ){
-//            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-//            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-//          } else
-//          if (inOpt.ymin>=1.6 && inOpt.ymax<=2.4) { // && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
-//            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-//            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
-//          } else { //Normal PbPb bins
-            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
-            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-//          }
+        } else { //fixResol2MC == true
+          if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
+          if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
         }
 
       } else if (inOpt.prefitSignalCTau && inOpt.isPEE == 0) {
@@ -1187,160 +1038,14 @@ int main (int argc, char* argv[]) {
 
       cout << "DATA :: N events to fit on the sidebands: " << redDataSB->sumEntries() << endl;
 
-      if (inOpt.isPbPb ==0) {
-        if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && (inOpt.pmax==7.5 || inOpt.pmax==8.0)) {
-          ws->var("fpm")->setVal(0.999);
-          ws->var("fLiving")->setVal(0.906);
-          ws->var("fbkgCtTot")->setVal(0.255);
-          ws->var("lambdap")->setVal(0.445);
-          ws->var("lambdam")->setVal(0.141);
-          ws->var("lambdasym")->setVal(0.152);
-        } else if (inOpt.ymin==0.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==7.5) {
-          ws->var("fpm")->setVal(0.986202);
-          ws->var("fLiving")->setVal(0.636215);
-          ws->var("fbkgCtTot")->setVal(0.287247);
-          ws->var("lambdap")->setVal(0.413972);
-          ws->var("lambdam")->setVal(0.504259);
-          ws->var("lambdasym")->setVal(0.0781019);
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && (inOpt.pmin==3 || inOpt.pmin==4.5) && (inOpt.pmax==4.5 || inOpt.pmax==5.5) ) {
-          ws->var("fpm")->setVal(0.9769);
-          ws->var("fLiving")->setVal(0.89133);
-          ws->var("fbkgCtTot")->setVal(0.31286);
-          ws->var("lambdap")->setVal(0.40377);
-          ws->var("lambdam")->setVal(0.14095);
-          ws->var("lambdasym")->setVal(0.14098);
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==6.5) {
-          ws->var("fpm")->setVal(0.9769);
-          ws->var("fLiving")->setVal(0.89133);
-          ws->var("fbkgCtTot")->setVal(0.31286);
-          ws->var("lambdap")->setVal(0.40377);
-          ws->var("lambdam")->setVal(0.14095);
-          ws->var("lambdasym")->setVal(0.14098);
-        } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-          ws->var("fpm")->setVal(0.9769);
-          ws->var("fLiving")->setVal(0.89133);
-          ws->var("fbkgCtTot")->setVal(0.31286);
-          ws->var("lambdap")->setVal(0.40377);
-          ws->var("lambdam")->setVal(0.14095);
-          ws->var("lambdasym")->setVal(0.14098);
-        } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3.0 && inOpt.pmax==30) {
-          ws->var("fpm")->setVal(0.817944);
-          ws->var("fLiving")->setVal(0.9999);
-          ws->var("fbkgCtTot")->setVal(0.604322);
-          ws->var("lambdap")->setVal(0.4172);
-          ws->var("lambdam")->setVal(0.0846182);
-          ws->var("lambdasym")->setVal(0.483258);
-        } else if (inOpt.doWeight == 1 && inOpt.ymin==1.6 && inOpt.ymax==2.0 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          ws->var("fpm")->setVal(0.99);
-          ws->var("fLiving")->setVal(0.785);
-          ws->var("fbkgCtTot")->setVal(0.336);
-          ws->var("lambdap")->setVal(0.46941);
-          ws->var("lambdam")->setVal(0.140905);
-          ws->var("lambdasym")->setVal(0.140942);
-        }
-      } else if (inOpt.isPbPb == 1) {
-        if (inOpt.ymin==0.0 && inOpt.ymax==2.4) {
-          if (inOpt.pmin==6.5 && (inOpt.pmax==8 || inOpt.pmax==7.5) ) {
-            ws->var("fpm")->setVal(0.49);
-            ws->var("fLiving")->setVal(0.91);
-            ws->var("fbkgCtTot")->setVal(0.65);
-            ws->var("lambdap")->setVal(0.13);
-            ws->var("lambdam")->setVal(0.088);
-            ws->var("lambdasym")->setVal(0.3);
-          } else if (inOpt.pmin==6.5 && inOpt.pmax==30) {
-            if (inOpt.cmin==20 && inOpt.cmax==30) {
-              ws->var("fpm")->setVal(0.643);
-              ws->var("fLiving")->setVal(0.984);
-              ws->var("fbkgCtTot")->setVal(0.558);
-              ws->var("lambdap")->setVal(0.196);
-              ws->var("lambdam")->setVal(0.071);
-              ws->var("lambdasym")->setVal(0.492);
-            } else if (inOpt.cmin==30 && (inOpt.cmax==35 || inOpt.cmax==40)) {
-              ws->var("fpm")->setVal(0.99);
-              ws->var("fLiving")->setVal(0.445);
-              ws->var("fbkgCtTot")->setVal(0.389);
-              ws->var("lambdap")->setVal(0.206);
-              ws->var("lambdam")->setVal(0.0816);
-              ws->var("lambdasym")->setVal(0.0711);
-            } // end of PbPb rap0.0-2.4_pT6.5-30.0
-          } // end of PbPb rap0.0-2.4
-        } else if (inOpt.ymin==1.2 && inOpt.ymax==1.6 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          if (inOpt.cmin==30 && inOpt.cmax==40) {
-            ws->var("fpm")->setVal(0.99);
-            ws->var("fLiving")->setVal(0.398);
-            ws->var("fbkgCtTot")->setVal(0.281);
-            ws->var("lambdap")->setVal(0.389);
-            ws->var("lambdam")->setVal(0.0935);
-            ws->var("lambdasym")->setVal(0.0705);
-          } // end of PbPb rap1.2-1.6
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
-          if (inOpt.pmin==3 && inOpt.pmax==4.5) {
-            ws->var("fpm")->setVal(0.734);
-            ws->var("fLiving")->setVal(0.84);
-            ws->var("fbkgCtTot")->setVal(0.679);
-            ws->var("lambdap")->setVal(0.113);
-            ws->var("lambdam")->setVal(0.074);
-            ws->var("lambdasym")->setVal(0.311);
-          } else if (inOpt.pmin==3 && inOpt.pmax==5.5) {
-            ws->var("fpm")->setVal(0.733);
-            ws->var("fLiving")->setVal(0.848);
-            ws->var("fbkgCtTot")->setVal(0.711);
-            ws->var("lambdap")->setVal(0.125);
-            ws->var("lambdam")->setVal(0.071);
-            ws->var("lambdasym")->setVal(0.31);
-          } else if (inOpt.pmin==3 && inOpt.pmax==6.5) {
-            ws->var("fpm")->setVal(0.640);
-            ws->var("fLiving")->setVal(0.865);
-            ws->var("fbkgCtTot")->setVal(0.706);
-            ws->var("lambdap")->setVal(0.138);
-            ws->var("lambdam")->setVal(0.0708);
-            ws->var("lambdasym")->setVal(0.307);
-          } else if (inOpt.pmin==4.5 && inOpt.pmax==5.5) {
-            ws->var("fpm")->setVal(0.59);
-            ws->var("fLiving")->setVal(0.546);
-            ws->var("fbkgCtTot")->setVal(0.845);
-            ws->var("lambdap")->setVal(0.317);
-            ws->var("lambdam")->setVal(0.0819);
-            ws->var("lambdasym")->setVal(0.255);
-          } else if (inOpt.pmin==5.5 && inOpt.pmax==6.5) {
-            ws->var("fpm")->setVal(0.640);
-            ws->var("fLiving")->setVal(0.865);
-            ws->var("fbkgCtTot")->setVal(0.706);
-            ws->var("lambdap")->setVal(0.138);
-            ws->var("lambdam")->setVal(0.0708);
-            ws->var("lambdasym")->setVal(0.307);
-          }
-        } else if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          if (inOpt.cmin==30 && inOpt.cmax==40) {
-            ws->var("fpm")->setVal(0.95);
-            ws->var("fLiving")->setVal(0.39);
-            ws->var("fbkgCtTot")->setVal(0.56);
-            ws->var("lambdap")->setVal(0.21);
-            ws->var("lambdam")->setVal(0.55);
-            ws->var("lambdasym")->setVal(0.071);
-          }
-        } else if (inOpt.ymin==2.0 && inOpt.ymax==2.4 && inOpt.pmin==6.5 && inOpt.pmax==30) {
-          ws->var("fpm")->setVal(0.56);
-          ws->var("fLiving")->setVal(0.92);
-          ws->var("fbkgCtTot")->setVal(0.80);
-          ws->var("lambdap")->setVal(0.16);
-          ws->var("lambdam")->setVal(0.087);
-          ws->var("lambdasym")->setVal(0.89);
-        } // end of lifetime bkg pbpb setting
-
-      } // end of lifetime bkg parameter setting
-
       if (inOpt.isPEE == 1) {
         if (inOpt.ctauBackground == 0) {
-//          fitSB = ws->pdf("bkgCtauTOT_PEE")->fitTo(*redDataSB,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1));
-          fitSB = ws->pdf("bkgCtauTOT_PEE")->fitTo(*redDataSB,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
+          fitSB = ws->pdf("bkgCtauTOT_PEE")->fitTo(*redDataSB,SumW2Error(kTRUE),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
           fitSB->Print("v");
         } else if (inOpt.ctauBackground == 1 || inOpt.ctauBackground == 2) {
-//          fitSBR = ws->pdf("bkgCtauTOTR_PEE")->fitTo(*redDataSBR,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1));
-          fitSBR = ws->pdf("bkgCtauTOTR_PEE")->fitTo(*redDataSBR,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
+          fitSBR = ws->pdf("bkgCtauTOTR_PEE")->fitTo(*redDataSBR,SumW2Error(kTRUE),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
           fitSBR->Print("v");
-//          fitSBL = ws->pdf("bkgCtauTOTL_PEE")->fitTo(*redDataSBL,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1));
-          fitSBL = ws->pdf("bkgCtauTOTL_PEE")->fitTo(*redDataSBL,SumW2Error(kTRUE),Minos(0),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
+          fitSBL = ws->pdf("bkgCtauTOTL_PEE")->fitTo(*redDataSBL,SumW2Error(kTRUE),NumCPU(8),Save(1),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
           fitSBL->Print("v");
         }
       } else {
@@ -1380,16 +1085,11 @@ int main (int argc, char* argv[]) {
           if (inOpt.isPbPb == 0) {
             if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kTRUE);
             if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
+            if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
+            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
+            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
             if (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) {
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-//              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kFALSE);
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
               ws->var("Bfrac")->setVal(0.05);
-            } else {
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
             }
           // end of pp
           } else if (inOpt.isPbPb == 1) {
@@ -1398,15 +1098,11 @@ int main (int argc, char* argv[]) {
             if ((inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin>=3 && inOpt.pmax<=6.5) ||
                 (inOpt.ymin==1.6 && inOpt.ymax==2.4 && inOpt.pmin==3 && inOpt.pmax==30)
                ) {
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
               ws->var("Bfrac")->setVal(0.05);
-            } else {
-              if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
-              if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
-              if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
             }
+            if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
+            if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kFALSE);
+            if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kFALSE);
           }
           // end of pbpb
 
@@ -1414,8 +1110,8 @@ int main (int argc, char* argv[]) {
           if (ws->var("fracRes")) ws->var("fracRes")->setConstant(kTRUE);
           if (ws->var("meanResSigW")) ws->var("meanResSigW")->setConstant(kTRUE);
           if (ws->var("meanResSigN")) ws->var("meanResSigN")->setConstant(kTRUE);
-          if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);//modified
-          if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);//modified
+          if (ws->var("sigmaResSigW")) ws->var("sigmaResSigW")->setConstant(kTRUE);
+          if (ws->var("sigmaResSigN")) ws->var("sigmaResSigN")->setConstant(kTRUE);
         } // end of inOpt.fixResol2MC
 
       } else if (inOpt.prefitSignalCTau && inOpt.isPEE == 0) {
@@ -1429,9 +1125,7 @@ int main (int argc, char* argv[]) {
         }
       }
       
-      if (inOpt.drawTimeConsumingPlots) {
-        drawCtauSBPlots(ws, redDataSB, redDataSBL, redDataSBR, binDataCtErrSB, fitSB, fitSBL, fitSBR, inOpt);
-      }
+      if (inOpt.drawTimeConsumingPlots) drawCtauSBPlots(ws, redDataSB, redDataSBL, redDataSBR, binDataCtErrSB, fitSB, fitSBL, fitSBR, inOpt);
     }
 
     // Fix below bkg variables in any case
@@ -1449,11 +1143,9 @@ int main (int argc, char* argv[]) {
     if (inOpt.prefitMass) {
       if (inOpt.isPEE == 1) {
         if (inOpt.ctauBackground == 0 || inOpt.ctauBackground == 2) {
-//          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataCut,Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
-          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataCut,Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
+          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataCut,Save(1),SumW2Error(kTRUE),NumCPU(8),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
         } else if (inOpt.ctauBackground == 1) {
-//          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataSIGWide,Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
-          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataSIGWide,Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
+          fit2D = ws->pdf("totPDF_PEE")->fitTo(*redDataSIGWide,Save(1),SumW2Error(kTRUE),NumCPU(8),ConditionalObservables(RooArgSet(*(ws->var("Jpsi_CtErr")))));
         }
       } else {
         fit2D = ws->pdf("totPDF")->fitTo(*redDataCut,Save(1),SumW2Error(kTRUE),NumCPU(8));
@@ -1464,7 +1156,7 @@ int main (int argc, char* argv[]) {
       RooPlot *tframe = ws->var("Jpsi_Ct")->frame();
       RooHist *hpulltot;
       redDataCut->plotOn(tframe,DataError(RooAbsData::SumW2),Binning(rb),MarkerSize(1));
-      ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+      ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
       TH1 *hdatact = redDataCut->createHistogram("hdatact",*ws->var("Jpsi_Ct"),Binning(rb));
       double chi2 = 0, unNormChi2 = 0;
       int dof = 0;
@@ -1492,13 +1184,13 @@ int main (int argc, char* argv[]) {
       ErrNSigNP_fin = NSigNP_fin * sqrt( pow(ErrNSig_fin/NSig_fin,2)+pow(ErrBfrac_fin/Bfrac_fin,2) );
       ErrNSigPR_fin = NSigPR_fin * sqrt ( pow(ErrNSig_fin/NSig_fin,2)+pow(ErrBfrac_fin/(1.0-Bfrac_fin),2) );
     } else {
-      fit2D = ws->pdf("totPDF")->fitTo(*redDataCut,Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+      fit2D = ws->pdf("totPDF")->fitTo(*redDataCut,Extended(1),Save(1),SumW2Error(kTRUE),NumCPU(8));
       nFitPar = fit2D->floatParsFinal().getSize();
       // *** Get chi2/ndof for ctau fitting
       RooPlot *tframe = ws->var("Jpsi_Ct")->frame();
       RooHist *hpulltot;
       redDataCut->plotOn(tframe,DataError(RooAbsData::SumW2),Binning(rb),MarkerSize(1));
-      ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+      ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
       TH1 *hdatact = redDataCut->createHistogram("hdatact",*ws->var("Jpsi_Ct"),Binning(rb));
       double chi2 = 0, unNormChi2 = 0;
       int dof = 0;
@@ -1551,7 +1243,7 @@ int main (int argc, char* argv[]) {
     cout << "PROMPT :     Fit : " << NSigPR_fin << " +/- " << ErrNSigPR_fin << endl;
     cout << "NON-PROMPT : Fit : " << NSigNP_fin << " +/- " << ErrNSigNP_fin << endl;
     cout << "Bfraction : Fit : " << Bfrac_fin << " +/- " << ErrBfrac_fin << endl;
-    cout << "Resolution : Fit : " << resol*1000. << " +/- " << Errresol*1000. << " mum" << endl;
+    cout << "Resolution : Fit : " << resol << " +/- " << Errresol << endl;
   }
 
 //  titlestr = inOpt.dirPre + "_rap" + inOpt.yrange + "_pT" + inOpt.prange + "_cent" + inOpt.crange + "_dPhi" + inOpt.phirange + "_ws.root";
@@ -1678,7 +1370,7 @@ int main (int argc, char* argv[]) {
     << "PROMPT "       << NSigPR_fin                        << " " << ErrNSigPR_fin << endl
     << "NON-PROMPT "   << NSigNP_fin                        << " " << ErrNSigNP_fin << endl
     << "Bfraction "    << Bfrac_fin                         << " " << ErrBfrac_fin << endl
-    << "Resolution "   << resol*1000.                       << " " << Errresol*1000. << endl;
+    << "Resolution "   << resol                             << " " << Errresol << endl;
   } else {
     outputFile
     << "PROMPT "       <<"0 0" << endl
@@ -1723,9 +1415,6 @@ int main (int argc, char* argv[]) {
     // Plot ctau plots with signal only
 //    drawCtauFitPlotsSignals(ws, redDataCut, redDataSB, redMCCutNP, NSigPR_fin, NSigNP_fin, inOpt);
 
-    // Plot resolution functions
-//    ctauResolFitCheck(ws, false, tframePR, inOpt);
-
     // Plot ctau plots
     if (inOpt.drawTimeConsumingPlots) {
       drawCtauFitPlots(ws, redDataCut, binDataCtErr, NSigNP_fin, NBkg_fin, fit2D, inOpt);
@@ -1756,6 +1445,7 @@ void parseInputArg(int argc, char* argv[], InputOpt &opt) {
  
   opt.analyticBlifetime = 0;
   opt.doBfit = 0;
+  opt.useWeightedNP = 0;
   opt.narrowSideband = 0;
   opt.oneGaussianResol = 1;
   opt.fixResol2MC = 0;
@@ -1861,22 +1551,32 @@ void parseInputArg(int argc, char* argv[], InputOpt &opt) {
               opt.analyticBlifetime = false;
               opt.doBfit = true;
               opt.drawTimeConsumingPlots = true;
+              opt.useWeightedNP = false;
               cout << "Turn Off: RooHistPdf from MC template of J/psi Ctau lifetime will be used" << endl;
             } else if (atoi(argv[i+1]) == 1) {
               opt.analyticBlifetime = true;
               opt.doBfit = true;
               opt.drawTimeConsumingPlots = true;
+              opt.useWeightedNP = false;
               cout << "Turn On: Analytical MC J/psi Ctau lifetime PDF will be used" << endl;
             } else if (atoi(argv[i+1]) == 2) {
               opt.analyticBlifetime = false;
               opt.doBfit = false;
               opt.drawTimeConsumingPlots = false;
+              opt.useWeightedNP = false;
               cout << "Turn Off: Only inclusive fitting will be performed" << endl;
             } else if (atoi(argv[i+1]) == 3) {
               opt.analyticBlifetime = true;
               opt.doBfit = true;
               opt.drawTimeConsumingPlots = false;
+              opt.useWeightedNP = false;
               cout << "Turn On: Analytical MC J/psi Ctau lifetime PDF will be used & no time-consuming plots" << endl;
+            } else if (atoi(argv[i+1]) == 4) {
+              opt.analyticBlifetime = false;
+              opt.doBfit = true;
+              opt.drawTimeConsumingPlots = true;
+              opt.useWeightedNP = true;
+              cout << "Turn Off: RooKeysPdf from MC (weighted reco) of J/psi Ctau lifetime will be used" << endl;
             }
             if (atoi(argv[i+2]) == 0) {
               opt.ctauBackground = 0;
@@ -2223,7 +1923,7 @@ void getCtauErrRange(RooDataSet *data, InputOpt &opt, const char *reduceDSOrig, 
 
 
   ws->factory(funct);
-  ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(1),Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+  ws->pdf("sigMassPDF")->fitTo(*redDataCut,Extended(1),Save(1),SumW2Error(kTRUE),NumCPU(8));
 
   // ** Test Ct error distribution on the sideband region
 //  RooPlot *errframe2 = ws->var("Jpsi_CtErr")->frame();
@@ -2394,10 +2094,12 @@ void setWSRange(RooWorkspace *ws, double lmin, double lmax, double errmin, doubl
   ws->var("Jpsi_Ct")->setRange(-lmin,lmax);
   ws->var("Jpsi_CtErr")->setRange(errmin,errmax);
 
-//  ws->cat("Jpsi_Type")->setRange("glbglb","GG");
   ws->cat("MCType")->setRange("prompt","PR");
   ws->cat("MCType")->setRange("nonprompt","NP");
 
+  ws->var("Jpsi_Mass")->SetTitle("m_{#mu#mu}");
+  ws->var("Jpsi_Ct")->SetTitle("#font[12]{l}_{J/#psi}");
+  
   return;
 }
 
@@ -2719,6 +2421,46 @@ void drawMassPlotsWithoutB(RooWorkspace *ws, RooDataSet* redDataCut, RooFitResul
 
 }
 
+void drawMassFitParsNLL(RooWorkspace *ws, RooDataSet* redDataCut, InputOpt &opt) {
+    string canvstr;
+    TCanvas canvnll("canvnll","canvnll",600,600);
+    
+    RooNLLVar nllVar("nllVar","nllVar",*(ws->pdf("sigMassPDF")),*redDataCut);
+    RooPlot *nll_coeffGaus = ws->var("coeffGaus")->frame(Title("coeffGaus"));
+    nllVar.plotOn(nll_coeffGaus,PrintEvalErrors(-1),ShiftToZero(),EvalErrorValue(nllVar.getVal()+10),LineColor(kRed));
+    nll_coeffGaus->SetMinimum(0);
+    nll_coeffGaus->Draw();
+    canvstr = opt.dirPre+ "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_coeffGaus.pdf";
+    canvnll.SaveAs(canvstr.c_str());
+    
+    RooPlot *nll_sigmaSig1 = ws->var("sigmaSig1")->frame(Title("sigmaSig1"));
+    nllVar.plotOn(nll_sigmaSig1,PrintEvalErrors(-1),ShiftToZero(),EvalErrorValue(nllVar.getVal()+10),LineColor(kRed));
+    nll_sigmaSig1->SetMinimum(0);
+    nll_sigmaSig1->Draw();
+    canvstr = opt.dirPre+ "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_sigmaSig1.pdf";
+    canvnll.SaveAs(canvstr.c_str());
+
+    RooPlot *nll_sigmaSig2;
+    if (!opt.mSigFunct.compare("signalCB3WN")) {
+      nll_sigmaSig2 = ws->var("sigmaSig3")->frame(Title("sigmaSig3"));
+    } else {
+      nll_sigmaSig2 = ws->var("sigmaSig2")->frame(Title("sigmaSig2"));
+    }
+    nllVar.plotOn(nll_sigmaSig2,PrintEvalErrors(-1),ShiftToZero(),EvalErrorValue(nllVar.getVal()+10),LineColor(kRed));
+    nll_sigmaSig2->SetMinimum(0);
+    nll_sigmaSig2->Draw();
+    canvstr = opt.dirPre+ "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_sigmaSig2.pdf";
+    canvnll.SaveAs(canvstr.c_str());
+
+    RooPlot *nll_nsig = ws->var("NSig")->frame(Title("NSig"));
+    nllVar.plotOn(nll_nsig,PrintEvalErrors(-1),ShiftToZero(),EvalErrorValue(nllVar.getVal()+10),LineColor(kRed));
+    nll_nsig->SetMinimum(0);
+    nll_nsig->Draw();
+    canvstr = opt.dirPre+ "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_nsig.pdf";
+    canvnll.SaveAs(canvstr.c_str());
+  }
+
+
 void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist *binDataCtErrSIG, RooDataHist *subtrData, RooDataHist *weightedBkg, InputOpt &opt) {
   string titlestr = opt.dirPre + "_rap" + opt.yrange  + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + ".root";
   TFile out(titlestr.c_str(),"update");
@@ -2779,12 +2521,48 @@ void ctauErrDistCheck(RooWorkspace *ws, RooDataHist *binDataCtErrSB, RooDataHist
   delete t;
 }
 
-void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooPlot *tframePR, InputOpt &opt) {
+void ctauResolFitCheck(RooWorkspace *ws, bool fitMC, RooDataSet *redMCCutPR, RooPlot *tframePR, InputOpt &opt) {
   string titlestr = opt.dirPre + "_rap" + opt.yrange  + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + ".root";
   TFile out(titlestr.c_str(),"update");
   if (!out.IsOpen()) {
     cout << "out file: " << titlestr<< " is not opened. Exit" << endl;
     return ;
+  }
+
+  if (fitMC) { // Only the first step requires creating pdfs
+    if (opt.isPEE==1) {
+      // Check prompt fit is fine with per event error fit. CtWeighted means l/err l
+      RooRealVar* CtWeighted = new RooRealVar("CtWeighted","#font[12]{l}_{J/#psi} / #sigma( #font[12]{l}_{J/#psi} )",-5.,5.);
+      ws->import(*CtWeighted);
+      const RooArgSet* thisRowpr = (RooArgSet*)redMCCutPR->get(0); 
+      RooArgSet* newRow = new RooArgSet(*CtWeighted);
+      RooDataSet* tempJpsi = new RooDataSet("tempJpsi","new data",*newRow);
+      for (Int_t iSamp = 0; iSamp < redMCCutPR->numEntries(); iSamp++) {
+        thisRowpr = (RooArgSet*)redMCCutPR->get(iSamp);
+        RooRealVar* myct = (RooRealVar*)thisRowpr->find("Jpsi_Ct");
+        RooRealVar* mycterr = (RooRealVar*)thisRowpr->find("Jpsi_CtErr");
+        CtWeighted->setVal(myct->getVal()/mycterr->getVal());
+        RooArgSet* tempRow = new RooArgSet(*CtWeighted);
+        tempJpsi->add(*tempRow);
+      }
+
+      if (opt.oneGaussianResol) {
+        ws->factory("Gaussian::tempsigPR(CtWeighted,meanResSigW,sigmaResSigN)");
+      } else {
+        ws->factory("Gaussian::tempresGW(CtWeighted,meanResSigW,sigmaResSigW)");
+        ws->factory("Gaussian::tempresGN(CtWeighted,meanResSigN,sigmaResSigN)");
+        ws->factory("SUM::tempsigPR(fracRes*tempresGW,tempresGN)");
+      }  
+
+      tframePR = ws->var("CtWeighted")->frame();
+      tempJpsi->plotOn(tframePR,DataError(RooAbsData::SumW2));
+      ws->pdf("tempsigPR")->plotOn(tframePR,NumCPU(8),LineColor(kBlue),Normalization(tempJpsi->sumEntries(),RooAbsReal::NumEvent));
+    } else {
+      tframePR = ws->var("Jpsi_Ct")->frame();
+      tframePR->GetXaxis()->SetTitle("#font[12]{l}_{J/#psi} (mm)");
+      redMCCutPR->plotOn(tframePR,DataError(RooAbsData::SumW2));
+      ws->pdf("sigPR")->plotOn(tframePR,LineColor(kBlue),Normalization(redMCCutPR->sumEntries(),RooAbsReal::NumEvent));
+    }
   }
 
   TLatex *t = new TLatex();  t->SetNDC();  t->SetTextAlign(12);
@@ -2922,7 +2700,7 @@ void drawCtauSBPlots(RooWorkspace *ws, RooDataSet *redDataSB, RooDataSet *redDat
     redDataSB->plotOn(tframe1,DataError(RooAbsData::SumW2));
     if (opt.isPEE == 1) {
 //      ws->pdf("bkgCtauTOT_PEE")->plotOn(tframe1,NumCPU(8),Normalization(redDataSB->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-      ws->pdf("bkgCtauTOT_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(redDataSB->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
+      ws->pdf("bkgCtauTOT_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
 //      ws->pdf("bkgCtauTOT_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),LineStyle(7));
     } else if (opt.isPEE == 0) {
       ws->pdf("bkgCtTot")->plotOn(tframe1,Normalization(redDataSB->sumEntries(),RooAbsReal::NumEvent));
@@ -3060,7 +2838,7 @@ void drawCtauSBPlots(RooWorkspace *ws, RooDataSet *redDataSB, RooDataSet *redDat
     tframe1->GetYaxis()->SetTitle(Form("Counts / (%.2f mm)",avgBinWidth));
     redDataSBL->plotOn(tframe1,DataError(RooAbsData::SumW2),Binning(rb));
 //    ws->pdf("bkgCtauTOTL_PEE")->plotOn(tframe1,NumCPU(8),Normalization(redDataSBL->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    ws->pdf("bkgCtauTOTL_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(redDataSBL->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
+    ws->pdf("bkgCtauTOTL_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
 //    ws->pdf("bkgCtauTOTL_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),LineStyle(7));
 
     TCanvas *c3 = new TCanvas("c3","The Canvas",200,10,600,880);
@@ -3195,7 +2973,7 @@ void drawCtauSBPlots(RooWorkspace *ws, RooDataSet *redDataSB, RooDataSet *redDat
     tframe1 = ws->var("Jpsi_Ct")->frame();
     redDataSBR->plotOn(tframe1,DataError(RooAbsData::SumW2),Binning(rb));
 //    ws->pdf("bkgCtauTOTR_PEE")->plotOn(tframe1,NumCPU(8),Normalization(redDataSBR->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    ws->pdf("bkgCtauTOTR_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(redDataSBR->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
+    ws->pdf("bkgCtauTOTR_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
 //    ws->pdf("bkgCtauTOTR_PEE")->plotOn(tframe1,ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSB,kTRUE),NumCPU(8),LineStyle(7));
 
     c3 = new TCanvas("c3","The Canvas",200,10,600,880);
@@ -3553,12 +3331,12 @@ void drawCtauFitPlots(RooWorkspace *ws, RooDataSet *redDataCut, RooDataHist* bin
     ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totSIGPR"),LineColor(kGreen),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(kDashDotted));
     ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
 */
-    ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+    ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
     hpulltot = tframe->pullHist(); hpulltot->SetName("hpulltot");
-    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totSIGNP"),LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(kDashed));
-    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totSIGPR"),LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(kDashDotted));
-    ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
+    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totSIGNP"),LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashed));
+    ws->pdf("totPDF_PEE")->plotOn(tframe,Components("totSIGPR"),LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashDotted));
+    ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
 
 /*    ws->pdf("totPDF_PEE")->plotOn(tframe,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
     hpulltot = tframe->pullHist(); hpulltot->SetName("hpulltot");
@@ -3726,46 +3504,32 @@ void drawCtauFitPlots(RooWorkspace *ws, RooDataSet *redDataCut, RooDataHist* bin
   tframefill->GetYaxis()->SetTitle(Form("Counts / (%.2f mm)",avgBinWidth));
   redDataCut->plotOn(tframefill,DataError(RooAbsData::SumW2),Binning(rb),MarkerSize(1));
   if (opt.isPEE == 1) {
-/*    ws->pdf("totPDF_PEE")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+    // Filled area under lines : but doesn't have correct normalization for NP components on ROOT v6.04.10
+/*    ws->pdf("totPDF_PEE")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
     RooAddPdf tmpPDF2("tmpPDF2","tmpPDF2",RooArgList(*(ws->pdf("totSIGNP")),*(ws->pdf("totBKG"))),RooArgList(tmpVar1,tmpVar2));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
+    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
+    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
     gStyle->SetHatchesLineWidth(2);
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),LineColor(kBlue),LineWidth(5),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    tmpPDF2.plotOn(tframefill,LineColor(kRed),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent),LineWidth(5),LineStyle(9));
-*/
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    RooAddPdf tmpPDF2("tmpPDF2","tmpPDF2",RooArgList(*(ws->pdf("totSIGNP")),*(ws->pdf("totBKG"))),RooArgList(tmpVar1,tmpVar2));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
-    gStyle->SetHatchesLineWidth(2);
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    tmpPDF2.plotOn(tframefill,LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent),LineWidth(5),LineStyle(9));
-
-/*    ws->pdf("totPDF_PEE")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
-    RooAddPdf tmpPDF2("tmpPDF2","tmpPDF2",RooArgList(*(ws->pdf("totSIGNP")),*(ws->pdf("totBKG"))),RooArgList(tmpVar1,tmpVar2));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
-    gStyle->SetHatchesLineWidth(2);
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8));
-    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),LineStyle(7));
-    tmpPDF2.plotOn(tframefill,LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),LineWidth(5),LineStyle(9));
-*/
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
+    tmpPDF2.plotOn(tframefill,LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineWidth(5),LineStyle(9));*/
+    // Same style as each component drawn with lines
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totBKG"),LineColor(kBlue),LineWidth(5),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totSIGNP"),LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashed));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,Components("totSIGPR"),LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashDotted));
+    ws->pdf("totPDF_PEE")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent));
   } else {  // not pee
-    ws->pdf("totPDF")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
+    ws->pdf("totPDF")->plotOn(tframefill,DrawOption("F"),FillColor(kBlack),FillStyle(3354),Normalization(1,RooAbsReal::NumEvent));
     RooAddPdf tmpPDF2("tmpPDF2","tmpPDF2",RooArgList(*(ws->pdf("sigNP")),*(ws->pdf("bkgCtTot"))),RooArgList(tmpVar1,tmpVar2));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
-    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent));
+    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kWhite),FillStyle(1001),Normalization(1,RooAbsReal::NumEvent));
+    tmpPDF2.plotOn(tframefill,DrawOption("F"),FillColor(kRed),FillStyle(3444),Normalization(1,RooAbsReal::NumEvent));
     gStyle->SetHatchesLineWidth(2);
-    ws->pdf("totPDF")->plotOn(tframefill,Components("bkgCtTot"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent));
-    ws->pdf("totPDF")->plotOn(tframefill,Components("bkgCtTot"),LineColor(kBlue),LineWidth(5),Normalization(redDataCut->sumEntries(),RooAbsReal::NumEvent),LineStyle(7));
-    tmpPDF2.plotOn(tframefill,LineColor(kRed),Normalization(NSigNP_fin+NBkg_fin,RooAbsReal::NumEvent),LineWidth(5),LineStyle(9));
+    ws->pdf("totPDF")->plotOn(tframefill,Components("bkgCtTot"),DrawOption("F"),FillColor(kAzure-9),FillStyle(1001),Normalization(1,RooAbsReal::NumEvent));
+    ws->pdf("totPDF")->plotOn(tframefill,LineColor(kBlack),LineWidth(2),Normalization(1,RooAbsReal::NumEvent));
+    ws->pdf("totPDF")->plotOn(tframefill,Components("bkgCtTot"),LineColor(kBlue),LineWidth(5),Normalization(1,RooAbsReal::NumEvent),LineStyle(7));
+    tmpPDF2.plotOn(tframefill,LineColor(kRed),Normalization(1,RooAbsReal::NumEvent),LineWidth(5),LineStyle(9));
   }
   redDataCut->plotOn(tframefill,DataError(RooAbsData::SumW2),Binning(rb),MarkerSize(1));
 
@@ -3788,16 +3552,18 @@ void drawCtauFitPlots(RooWorkspace *ws, RooDataSet *redDataCut, RooDataHist* bin
 
   TLegend * leg11;
   if (opt.usedPhi) {
-    leg11 = new TLegend(0.58,0.44,0.92,0.58,NULL,"brNDC");
+//    leg11 = new TLegend(0.58,0.44,0.92,0.58,NULL,"brNDC");
+    leg11 = new TLegend(0.18,0.54,0.42,0.68,NULL,"brNDC");
   } else{
-    leg11 = new TLegend(0.58,0.5,0.92,0.64,NULL,"brNDC");
+//    leg11 = new TLegend(0.58,0.5,0.92,0.64,NULL,"brNDC");
+    leg11 = new TLegend(0.18,0.6,0.42,0.74,NULL,"brNDC");
   }
   leg11->SetFillStyle(0); leg11->SetBorderSize(0); leg11->SetShadowColor(0);
   leg11->SetMargin(0.2);
   leg11->AddEntry(gfake1,"data","p");
-  leg11->AddEntry(&hfake21,"total fit","lf");
-  leg11->AddEntry(&hfake31,"bkgd + non-prompt","lf"); 
-  leg11->AddEntry(&hfake11,"background","lf");
+  leg11->AddEntry(&hfake21,"total fit","l");
+  leg11->AddEntry(&hfake31,"non-prompt","l"); 
+  leg11->AddEntry(&hfake11,"background","l");
   leg11->Draw("same");
 
   titlestr = opt.dirPre + "_rap" + opt.yrange + "_pT" + opt.prange + "_cent" + opt.crange + "_dPhi" + opt.phirange + "_timefit_Log_wopull.pdf";
@@ -4037,7 +3803,7 @@ void drawCtauFitPlotsSignals(RooWorkspace *ws, RooDataSet *redDataCut, RooDataSe
 
   ws->factory("SUM::sigPDF(Bfrac2[0.25,0.0,1.0]*sigNP2,sigPR2)");
   RooDataHist *sigHist = new RooDataHist("subHist","sigHist",RooArgList(*(ws->var("Jpsi_Ct"))),subtrSighist);
-  RooFitResult *sigres = ws->pdf("sigPDF")->fitTo(*sigHist,Minos(0),Save(1),SumW2Error(kTRUE),NumCPU(8));
+  RooFitResult *sigres = ws->pdf("sigPDF")->fitTo(*sigHist,Save(1),SumW2Error(kTRUE),NumCPU(8));
   sigres->Print("v");
 
   RooPlot *tframeSig = ws->var("Jpsi_Ct")->frame();
@@ -4065,11 +3831,11 @@ void drawCtauFitPlotsSignals(RooWorkspace *ws, RooDataSet *redDataCut, RooDataSe
 */
 //    ws->pdf("totPDF_PEE")->plotOn(tframeSig,LineColor(kBlue),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(NSig_fin,RooAbsReal::NumEvent));
     RooAddPdf tmpPDF2("tmpPDF2","tmpPDF2",RooArgList(*(ws->pdf("totSIGNP2")),*(ws->pdf("totSIGPR2"))),RooArgList(tmpVar1,tmpVar3)); //tmpVar1 = NSigNP, tmpVar3 = NSigPR
-    tmpPDF2.plotOn(tframeSig,LineColor(kBlack),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(NSig_fin,RooAbsReal::NumEvent),LineWidth(2));
+    tmpPDF2.plotOn(tframeSig,LineColor(kBlack),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineWidth(2));
 //    ws->pdf("totPDF_PEE")->plotOn(tframeSig,Components("totSIGNP"),LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSIG,kTRUE),NumCPU(8),Normalization(NSig_fin,RooAbsReal::NumEvent),LineStyle(kDashed));
 //    ws->pdf("totPDF_PEE")->plotOn(tframeSig,Components("totSIGPR"),LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErrSIG,kTRUE),NumCPU(8),Normalization(NSig_fin,RooAbsReal::NumEvent),LineStyle(kDashDotted));
-    ws->pdf("totSIGNP2")->plotOn(tframeSig,LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(NSigNP_fin,RooAbsReal::NumEvent),LineStyle(kDashed));
-    ws->pdf("totSIGPR2")->plotOn(tframeSig,LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(NSigPR_fin,RooAbsReal::NumEvent),LineStyle(kDashDotted));
+    ws->pdf("totSIGNP2")->plotOn(tframeSig,LineColor(kRed),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashed));
+    ws->pdf("totSIGPR2")->plotOn(tframeSig,LineColor(kGreen),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*subtrData,kTRUE),NumCPU(8),Normalization(1,RooAbsReal::NumEvent),LineStyle(kDashDotted));
 //    ws->pdf("totPDF_PEE")->plotOn(tframeSig,LineColor(kBlack),LineWidth(2),ProjWData(RooArgList(*(ws->var("Jpsi_CtErr"))),*binDataCtErr,kTRUE),NumCPU(8),Normalization(NSig_fin,RooAbsReal::NumEvent));
 
   } else {  //not pee
